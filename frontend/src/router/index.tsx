@@ -29,6 +29,10 @@ const SettlementList = lazy(() => import('@/pages/Settlement/SettlementList'))
 const SettlementCalculator = lazy(() => import('@/pages/Settlement/SettlementCalculator'))
 const SettlementReports = lazy(() => import('@/pages/Settlement/SettlementReports'))
 const NotificationCenter = lazy(() => import('@/pages/Notification/NotificationCenter'))
+const NotificationList = lazy(() => import('@/pages/Notification/NotificationList'))
+const NotificationSend = lazy(() => import('@/pages/Notification/NotificationSend'))
+const NotificationTemplates = lazy(() => import('@/pages/Notification/NotificationTemplates'))
+const NotificationSettings = lazy(() => import('@/pages/Notification/NotificationSettings'))
 const FileManagement = lazy(() => import('@/pages/File/FileManagement'))
 const SystemSettings = lazy(() => import('@/pages/System/SystemSettings'))
 
@@ -265,6 +269,38 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <NotificationCenter />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'list',
+            element: (
+              <PageSuspense>
+                <NotificationList />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'send',
+            element: (
+              <PageSuspense>
+                <NotificationSend />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'templates',
+            element: (
+              <PageSuspense>
+                <NotificationTemplates />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'settings',
+            element: (
+              <PageSuspense>
+                <NotificationSettings />
               </PageSuspense>
             ),
           },

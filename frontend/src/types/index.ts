@@ -577,3 +577,127 @@ export interface FeeDetail {
   remarks?: string
 }
 
+/**
+ * 通知状态枚举
+ */
+export enum NotificationStatus {
+  UNREAD = 0, // 未读
+  READ = 1, // 已读
+  DELETED = 2, // 已删除
+}
+
+/**
+ * 通知类型枚举
+ */
+export enum NotificationType {
+  SYSTEM = 1, // 系统通知
+  CASE_UPDATE = 2, // 案件更新
+  ASSIGNMENT = 3, // 分案通知
+  MEDIATION = 4, // 调解通知
+  LITIGATION = 5, // 诉讼通知
+  SETTLEMENT = 6, // 结算通知
+  REMINDER = 7, // 提醒通知
+  ANNOUNCEMENT = 8, // 公告通知
+}
+
+/**
+ * 通知优先级枚举
+ */
+export enum NotificationPriority {
+  LOW = 1, // 低
+  NORMAL = 2, // 普通
+  HIGH = 3, // 高
+  URGENT = 4, // 紧急
+}
+
+/**
+ * 通知记录
+ */
+export interface NotificationRecord {
+  id: number
+  title: string
+  content: string
+  type: NotificationType
+  priority: NotificationPriority
+  status: NotificationStatus
+  targetUserId: number
+  targetUserName?: string
+  relatedId?: number
+  relatedType?: string
+  senderId?: number
+  senderName?: string
+  readTime?: string
+  createTime: string
+  expireTime?: string
+  actions?: NotificationAction[]
+}
+
+/**
+ * 通知操作
+ */
+export interface NotificationAction {
+  type: string
+  label: string
+  url?: string
+  method?: string
+  params?: any
+}
+
+/**
+ * 通知模板
+ */
+export interface NotificationTemplate {
+  id: number
+  name: string
+  title: string
+  content: string
+  type: NotificationType
+  variables: Array<{
+    name: string
+    label: string
+    type: string
+    required: boolean
+    defaultValue?: any
+  }>
+  isActive: boolean
+  createTime: string
+}
+
+/**
+ * 通知设置
+ */
+export interface NotificationSettings {
+  userId: number
+  emailEnabled: boolean
+  smsEnabled: boolean
+  inAppEnabled: boolean
+  soundEnabled: boolean
+  typeSettings: Array<{
+    type: NotificationType
+    emailEnabled: boolean
+    smsEnabled: boolean
+    inAppEnabled: boolean
+  }>
+  quietHours?: {
+    enabled: boolean
+    startTime: string
+    endTime: string
+  }
+}
+
+/**
+ * 通知统计
+ */
+export interface NotificationStats {
+  totalCount: number
+  unreadCount: number
+  todayCount: number
+  weekCount: number
+  typeDistribution: Array<{
+    type: NotificationType
+    typeName: string
+    count: number
+    unreadCount: number
+  }>
+}
+
