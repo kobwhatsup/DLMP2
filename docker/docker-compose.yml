@@ -1,0 +1,276 @@
+version: '3.8'
+
+services:
+  # MySQL主库
+  mysql-master:
+    image: mysql:8.0
+    container_name: dlmp-mysql-master
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: lawsuit_platform
+      MYSQL_USER: dlmp_user
+      MYSQL_PASSWORD: dlmp123456
+    command: [
+      '--default-authentication-plugin=mysql_native_password',
+      '--character-set-server=utf8mb4',
+      '--collation-server=utf8mb4_unicode_ci',
+      '--server-id=1',
+      '--log-bin=mysql-bin',
+      '--binlog-format=ROW',
+      '--gtid-mode=ON',
+      '--enforce-gtid-consistency=ON',
+      '--max-connections=2000',
+      '--innodb-buffer-pool-size=2G'
+    ]
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql/master/data:/var/lib/mysql
+      - ./mysql/master/conf:/etc/mysql/conf.d
+      - ./mysql/logs:/var/log/mysql
+      - ../sql:/docker-entrypoint-initdb.d
+    networks:
+      - dlmp-network
+
+  # MySQL从库1
+  mysql-slave1:
+    image: mysql:8.0
+    container_name: dlmp-mysql-slave1
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: lawsuit_platform
+      MYSQL_USER: dlmp_user
+      MYSQL_PASSWORD: dlmp123456
+    command: [
+      '--default-authentication-plugin=mysql_native_password',
+      '--character-set-server=utf8mb4',
+      '--collation-server=utf8mb4_unicode_ci',
+      '--server-id=2',
+      '--log-bin=mysql-bin',
+      '--binlog-format=ROW',
+      '--gtid-mode=ON',
+      '--enforce-gtid-consistency=ON',
+      '--relay-log=mysql-relay-bin',
+      '--read-only=1'
+    ]
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql/slave1/data:/var/lib/mysql
+      - ./mysql/slave1/conf:/etc/mysql/conf.d
+    networks:
+      - dlmp-network
+    depends_on:
+      - mysql-master
+
+  # Redis集群节点1
+  redis-node1:
+    image: redis:7.0
+    container_name: dlmp-redis-node1
+    restart: always
+    command: redis-server /etc/redis/redis.conf --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7001
+    ports:
+      - "7001:7001"
+      - "17001:17001"
+    volumes:
+      - ./redis/node1/data:/data
+      - ./redis/node1/redis.conf:/etc/redis/redis.conf
+    networks:
+      - dlmp-network
+
+  # Redis集群节点2
+  redis-node2:
+    image: redis:7.0
+    container_name: dlmp-redis-node2
+    restart: always
+    command: redis-server /etc/redis/redis.conf --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7002
+    ports:
+      - "7002:7002"
+      - "17002:17002"
+    volumes:
+      - ./redis/node2/data:/data
+      - ./redis/node2/redis.conf:/etc/redis/redis.conf
+    networks:
+      - dlmp-network
+
+  # Redis集群节点3
+  redis-node3:
+    image: redis:7.0
+    container_name: dlmp-redis-node3
+    restart: always
+    command: redis-server /etc/redis/redis.conf --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7003
+    ports:
+      - "7003:7003"
+      - "17003:17003"
+    volumes:
+      - ./redis/node3/data:/data
+      - ./redis/node3/redis.conf:/etc/redis/redis.conf
+    networks:
+      - dlmp-network
+
+  # Nacos服务注册中心
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: dlmp-nacos
+    restart: always
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql-master
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: dlmp_user
+      MYSQL_SERVICE_PASSWORD: dlmp123456
+      NACOS_AUTH_ENABLE: true
+      NACOS_AUTH_TOKEN: SecretKey012345678901234567890123456789012345678901234567890123456789
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: security
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    volumes:
+      - ./nacos/logs:/home/nacos/logs
+      - ./nacos/data:/home/nacos/data
+    networks:
+      - dlmp-network
+    depends_on:
+      - mysql-master
+
+  # RocketMQ NameServer
+  rocketmq-nameserver:
+    image: apache/rocketmq:4.9.4
+    container_name: dlmp-rocketmq-nameserver
+    restart: always
+    command: ["sh", "mqnamesrv"]
+    environment:
+      JAVA_OPT: "-Duser.home=/home/rocketmq"
+    ports:
+      - "9876:9876"
+    volumes:
+      - ./rocketmq/nameserver/logs:/home/rocketmq/logs
+      - ./rocketmq/nameserver/store:/home/rocketmq/store
+    networks:
+      - dlmp-network
+
+  # RocketMQ Broker
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.4
+    container_name: dlmp-rocketmq-broker
+    restart: always
+    command: ["sh", "mqbroker", "-n", "rocketmq-nameserver:9876", "-c", "/home/rocketmq/conf/broker.conf"]
+    environment:
+      JAVA_OPT: "-Duser.home=/home/rocketmq"
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    volumes:
+      - ./rocketmq/broker/logs:/home/rocketmq/logs
+      - ./rocketmq/broker/store:/home/rocketmq/store
+      - ./rocketmq/broker/conf/broker.conf:/home/rocketmq/conf/broker.conf
+    networks:
+      - dlmp-network
+    depends_on:
+      - rocketmq-nameserver
+
+  # Elasticsearch
+  elasticsearch:
+    image: elasticsearch:8.8.0
+    container_name: dlmp-elasticsearch
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - ./elasticsearch/data:/usr/share/elasticsearch/data
+      - ./elasticsearch/logs:/usr/share/elasticsearch/logs
+    networks:
+      - dlmp-network
+
+  # Kibana
+  kibana:
+    image: kibana:8.8.0
+    container_name: dlmp-kibana
+    restart: always
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - dlmp-network
+    depends_on:
+      - elasticsearch
+
+  # MinIO对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: dlmp-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123456
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./minio/data:/data
+    networks:
+      - dlmp-network
+
+  # Prometheus监控
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dlmp-prometheus
+    restart: always
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/data:/prometheus
+    networks:
+      - dlmp-network
+
+  # Grafana监控面板
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dlmp-grafana
+    restart: always
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123456
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+    networks:
+      - dlmp-network
+    depends_on:
+      - prometheus
+
+networks:
+  dlmp-network:
+    driver: bridge
+
+volumes:
+  mysql-master-data:
+  mysql-slave1-data:
+  redis-data:
+  nacos-data:
+  rocketmq-data:
+  elasticsearch-data:
+  minio-data:
+  prometheus-data:
+  grafana-data:
