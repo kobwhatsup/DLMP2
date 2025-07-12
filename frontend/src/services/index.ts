@@ -7,6 +7,7 @@ export * from './mediationService'
 export * from './litigationService'
 export * from './settlementService'
 export * from './notificationService'
+export * from './fileService'
 
 // 统一导出http工具
 export { http } from '@/utils/request'

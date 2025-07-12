@@ -34,6 +34,11 @@ const NotificationSend = lazy(() => import('@/pages/Notification/NotificationSen
 const NotificationTemplates = lazy(() => import('@/pages/Notification/NotificationTemplates'))
 const NotificationSettings = lazy(() => import('@/pages/Notification/NotificationSettings'))
 const FileManagement = lazy(() => import('@/pages/File/FileManagement'))
+const FileList = lazy(() => import('@/pages/File/FileList'))
+const FileUpload = lazy(() => import('@/pages/File/FileUpload'))
+const FileShare = lazy(() => import('@/pages/File/FileShare'))
+const FileStats = lazy(() => import('@/pages/File/FileStats'))
+const FileTrash = lazy(() => import('@/pages/File/FileTrash'))
 const SystemSettings = lazy(() => import('@/pages/System/SystemSettings'))
 
 // 加载中组件
@@ -314,6 +319,46 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <FileManagement />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'list',
+            element: (
+              <PageSuspense>
+                <FileList />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'upload',
+            element: (
+              <PageSuspense>
+                <FileUpload />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'share',
+            element: (
+              <PageSuspense>
+                <FileShare />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'stats',
+            element: (
+              <PageSuspense>
+                <FileStats />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'trash',
+            element: (
+              <PageSuspense>
+                <FileTrash />
               </PageSuspense>
             ),
           },

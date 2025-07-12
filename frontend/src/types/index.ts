@@ -701,3 +701,167 @@ export interface NotificationStats {
   }>
 }
 
+/**
+ * 文件状态枚举
+ */
+export enum FileStatus {
+  UPLOADING = 1, // 上传中
+  SUCCESS = 2, // 上传成功
+  FAILED = 3, // 上传失败
+  PROCESSING = 4, // 处理中
+  DELETED = 5, // 已删除
+}
+
+/**
+ * 文件类型枚举
+ */
+export enum FileType {
+  DOCUMENT = 1, // 文档
+  IMAGE = 2, // 图片
+  VIDEO = 3, // 视频
+  AUDIO = 4, // 音频
+  ARCHIVE = 5, // 压缩包
+  OTHER = 6, // 其他
+}
+
+/**
+ * 文件存储类型枚举
+ */
+export enum StorageType {
+  LOCAL = 1, // 本地存储
+  OSS = 2, // 对象存储
+  CDN = 3, // CDN
+}
+
+/**
+ * 文件记录
+ */
+export interface FileRecord {
+  id: number
+  fileName: string
+  originalName: string
+  filePath: string
+  fileSize: number
+  fileType: FileType
+  mimeType: string
+  fileHash: string
+  thumbnailPath?: string
+  previewPath?: string
+  status: FileStatus
+  storageType: StorageType
+  uploaderId: number
+  uploaderName: string
+  relatedId?: number
+  relatedType?: string
+  tags?: string[]
+  description?: string
+  downloadCount: number
+  viewCount: number
+  isPublic: boolean
+  expireTime?: string
+  createTime: string
+  updateTime?: string
+}
+
+/**
+ * 文件夹记录
+ */
+export interface FolderRecord {
+  id: number
+  name: string
+  path: string
+  parentId?: number
+  parentPath?: string
+  description?: string
+  fileCount: number
+  totalSize: number
+  creatorId: number
+  creatorName: string
+  isPublic: boolean
+  createTime: string
+  updateTime?: string
+  children?: FolderRecord[]
+}
+
+/**
+ * 文件上传配置
+ */
+export interface UploadConfig {
+  maxFileSize: number
+  allowedTypes: string[]
+  chunkSize: number
+  concurrent: number
+  autoThumbnail: boolean
+  autoPreview: boolean
+  storageType: StorageType
+  expireDays?: number
+}
+
+/**
+ * 文件分享记录
+ */
+export interface FileShare {
+  id: number
+  fileId: number
+  fileName: string
+  shareCode: string
+  shareUrl: string
+  password?: string
+  downloadLimit?: number
+  downloadCount: number
+  viewLimit?: number
+  viewCount: number
+  expireTime?: string
+  creatorId: number
+  creatorName: string
+  isActive: boolean
+  createTime: string
+}
+
+/**
+ * 文件操作日志
+ */
+export interface FileOperationLog {
+  id: number
+  fileId: number
+  fileName: string
+  operation: string
+  operatorId: number
+  operatorName: string
+  clientIp: string
+  userAgent: string
+  result: string
+  errorMessage?: string
+  createTime: string
+}
+
+/**
+ * 文件统计
+ */
+export interface FileStats {
+  totalFiles: number
+  totalSize: number
+  totalFolders: number
+  todayUploads: number
+  todayDownloads: number
+  storageUsage: Array<{
+    storageType: StorageType
+    count: number
+    size: number
+    percentage: number
+  }>
+  typeDistribution: Array<{
+    fileType: FileType
+    typeName: string
+    count: number
+    size: number
+    percentage: number
+  }>
+  monthlyStats: Array<{
+    month: string
+    uploads: number
+    downloads: number
+    size: number
+  }>
+}
+

@@ -1,24 +1,133 @@
-import { Card, Typography } from 'antd'
-import { PageHeader } from '@/components'
+import React, { useState } from 'react'
+import { Card, Tabs, Button, Space } from 'antd'
+import {
+  FolderOutlined,
+  UploadOutlined,
+  ShareAltOutlined,
+  BarChartOutlined,
+  DeleteOutlined,
+  SettingOutlined
+} from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 
-const { Title, Paragraph } = Typography
+import FileList from './FileList'
+import FileUpload from './FileUpload'
+import FileShare from './FileShare'
+import FileStats from './FileStats'
+import FileTrash from './FileTrash'
+
+const { TabPane } = Tabs
 
 const FileManagement: React.FC = () => {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('files')
+
+  const handleTabChange = (key: string) => {
+    setActiveTab(key)
+  }
+
+  const tabExtra = (
+    <Space>
+      <Button 
+        type="primary" 
+        icon={<UploadOutlined />}
+        onClick={() => setActiveTab('upload')}
+      >
+        上传文件
+      </Button>
+      <Button 
+        icon={<ShareAltOutlined />}
+        onClick={() => setActiveTab('share')}
+      >
+        文件分享
+      </Button>
+      <Button 
+        icon={<BarChartOutlined />}
+        onClick={() => setActiveTab('stats')}
+      >
+        存储统计
+      </Button>
+      <Button 
+        icon={<SettingOutlined />}
+        onClick={() => navigate('/file/settings')}
+      >
+        设置
+      </Button>
+    </Space>
+  )
+
   return (
     <div>
-      <PageHeader
-        title="文件管理"
-        subtitle="案件材料、法律文书和附件的存储管理"
-        showRefresh
-      />
-      
-      <Card>
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <Title level={3}>功能开发中</Title>
-          <Paragraph type="secondary">
-            该功能正在开发中，敬请期待...
-          </Paragraph>
-        </div>
+      <Card 
+        title="文件管理中心" 
+        extra={tabExtra}
+        bodyStyle={{ padding: 0 }}
+      >
+        <Tabs 
+          activeKey={activeTab} 
+          onChange={handleTabChange}
+          style={{ padding: '0 24px' }}
+        >
+          <TabPane
+            tab={
+              <span>
+                <FolderOutlined />
+                文件列表
+              </span>
+            }
+            key="files"
+          >
+            <FileList />
+          </TabPane>
+          
+          <TabPane
+            tab={
+              <span>
+                <UploadOutlined />
+                文件上传
+              </span>
+            }
+            key="upload"
+          >
+            <FileUpload />
+          </TabPane>
+          
+          <TabPane
+            tab={
+              <span>
+                <ShareAltOutlined />
+                文件分享
+              </span>
+            }
+            key="share"
+          >
+            <FileShare />
+          </TabPane>
+          
+          <TabPane
+            tab={
+              <span>
+                <BarChartOutlined />
+                存储统计
+              </span>
+            }
+            key="stats"
+          >
+            <FileStats />
+          </TabPane>
+          
+          <TabPane
+            tab={
+              <span>
+                <DeleteOutlined />
+                回收站
+              </span>
+            }
+            key="trash"
+          >
+            <FileTrash />
+          </TabPane>
+        </Tabs>
       </Card>
     </div>
   )
