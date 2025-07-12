@@ -514,3 +514,66 @@ export interface ExecutionRecord {
   createTime: string
 }
 
+/**
+ * 结算状态枚举
+ */
+export enum SettlementStatus {
+  DRAFT = 1, // 草稿
+  PENDING = 2, // 待审核
+  APPROVED = 3, // 已审核
+  PAID = 4, // 已付款
+  PARTIAL_PAID = 5, // 部分付款
+  OVERDUE = 6, // 逾期
+  CANCELLED = 7, // 已取消
+}
+
+/**
+ * 费用类型枚举
+ */
+export enum FeeType {
+  SERVICE_FEE = 1, // 服务费
+  LITIGATION_FEE = 2, // 诉讼费
+  EXECUTION_FEE = 3, // 执行费
+  COMMISSION = 4, // 佣金
+  OTHER = 5, // 其他费用
+}
+
+/**
+ * 结算记录
+ */
+export interface SettlementRecord {
+  id: number
+  settlementNumber: string
+  caseId: number
+  caseNumber: string
+  clientId: number
+  clientName: string
+  settlementType: string
+  totalAmount: number
+  paidAmount: number
+  unpaidAmount: number
+  status: SettlementStatus
+  dueDate?: string
+  description?: string
+  feeDetails?: FeeDetail[]
+  createTime: string
+  updateTime?: string
+  creatorId: number
+  creatorName: string
+}
+
+/**
+ * 费用明细
+ */
+export interface FeeDetail {
+  id: number
+  feeType: FeeType
+  description: string
+  amount: number
+  calculationMethod: string
+  baseAmount?: number
+  rate?: number
+  formula?: string
+  remarks?: string
+}
+

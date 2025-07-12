@@ -25,6 +25,9 @@ const LitigationManagement = lazy(() => import('@/pages/Litigation/LitigationMan
 const LitigationList = lazy(() => import('@/pages/Litigation/LitigationList'))
 const LitigationProcess = lazy(() => import('@/pages/Litigation/LitigationProcess'))
 const SettlementManagement = lazy(() => import('@/pages/Settlement/SettlementManagement'))
+const SettlementList = lazy(() => import('@/pages/Settlement/SettlementList'))
+const SettlementCalculator = lazy(() => import('@/pages/Settlement/SettlementCalculator'))
+const SettlementReports = lazy(() => import('@/pages/Settlement/SettlementReports'))
 const NotificationCenter = lazy(() => import('@/pages/Notification/NotificationCenter'))
 const FileManagement = lazy(() => import('@/pages/File/FileManagement'))
 const SystemSettings = lazy(() => import('@/pages/System/SystemSettings'))
@@ -225,6 +228,30 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <SettlementManagement />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'list',
+            element: (
+              <PageSuspense>
+                <SettlementList />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'calculator',
+            element: (
+              <PageSuspense>
+                <SettlementCalculator />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'reports',
+            element: (
+              <PageSuspense>
+                <SettlementReports />
               </PageSuspense>
             ),
           },
