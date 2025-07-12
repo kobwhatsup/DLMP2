@@ -20,6 +20,19 @@
         <module>common/common-redis</module>
         <module>common/common-log</module>
         <module>common/common-swagger</module>
+        
+        <!-- API网关 -->
+        <module>gateway</module>
+        
+        <!-- 微服务模块 -->
+        <module>services/user-service</module>
+        <module>services/case-service</module>
+        <module>services/assignment-service</module>
+        <module>services/mediation-service</module>
+        <module>services/litigation-service</module>
+        <module>services/settlement-service</module>
+        <module>services/notification-service</module>
+        <module>services/file-service</module>
     </modules>
 
     <properties>
@@ -158,8 +171,25 @@
             <!-- JWT -->
             <dependency>
                 <groupId>io.jsonwebtoken</groupId>
-                <artifactId>jjwt</artifactId>
-                <version>0.9.1</version>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jwt.version}</version>
+            </dependency>
+            
+            <!-- 验证码 -->
+            <dependency>
+                <groupId>com.github.penggle</groupId>
+                <artifactId>kaptcha</artifactId>
+                <version>2.3.2</version>
             </dependency>
             
             <!-- 加密算法 -->

@@ -1,0 +1,111 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: dlmp-gateway
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        namespace: dev
+        group: DLMP_GROUP
+      config:
+        server-addr: localhost:8848
+        file-extension: yml
+        namespace: dev
+        group: DLMP_GROUP
+    gateway:
+      routes:
+        # 用户服务路由
+        - id: user-service
+          uri: lb://dlmp-user-service
+          predicates:
+            - Path=/user/**
+          filters:
+            - StripPrefix=1
+            
+        # 案件管理服务路由
+        - id: case-service
+          uri: lb://dlmp-case-service
+          predicates:
+            - Path=/case/**
+          filters:
+            - StripPrefix=1
+            
+        # 智能分案服务路由
+        - id: assignment-service
+          uri: lb://dlmp-assignment-service
+          predicates:
+            - Path=/assignment/**
+          filters:
+            - StripPrefix=1
+            
+        # 调解管理服务路由
+        - id: mediation-service
+          uri: lb://dlmp-mediation-service
+          predicates:
+            - Path=/mediation/**
+          filters:
+            - StripPrefix=1
+            
+        # 诉讼管理服务路由
+        - id: litigation-service
+          uri: lb://dlmp-litigation-service
+          predicates:
+            - Path=/litigation/**
+          filters:
+            - StripPrefix=1
+            
+        # 结算管理服务路由
+        - id: settlement-service
+          uri: lb://dlmp-settlement-service
+          predicates:
+            - Path=/settlement/**
+          filters:
+            - StripPrefix=1
+            
+        # 通知服务路由
+        - id: notification-service
+          uri: lb://dlmp-notification-service
+          predicates:
+            - Path=/notification/**
+          filters:
+            - StripPrefix=1
+            
+        # 文件管理服务路由
+        - id: file-service
+          uri: lb://dlmp-file-service
+          predicates:
+            - Path=/file/**
+          filters:
+            - StripPrefix=1
+      
+      # 全局CORS配置
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+
+# 监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    com.matrix.lawsuit: debug
+    org.springframework.cloud.gateway: debug
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{50} - %msg%n"
