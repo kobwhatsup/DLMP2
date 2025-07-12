@@ -22,6 +22,8 @@ const MediationManagement = lazy(() => import('@/pages/Mediation/MediationManage
 const MediationList = lazy(() => import('@/pages/Mediation/MediationList'))
 const MediationProcess = lazy(() => import('@/pages/Mediation/MediationProcess'))
 const LitigationManagement = lazy(() => import('@/pages/Litigation/LitigationManagement'))
+const LitigationList = lazy(() => import('@/pages/Litigation/LitigationList'))
+const LitigationProcess = lazy(() => import('@/pages/Litigation/LitigationProcess'))
 const SettlementManagement = lazy(() => import('@/pages/Settlement/SettlementManagement'))
 const NotificationCenter = lazy(() => import('@/pages/Notification/NotificationCenter'))
 const FileManagement = lazy(() => import('@/pages/File/FileManagement'))
@@ -194,6 +196,22 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <LitigationManagement />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'list',
+            element: (
+              <PageSuspense>
+                <LitigationList />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'process/:id',
+            element: (
+              <PageSuspense>
+                <LitigationProcess />
               </PageSuspense>
             ),
           },

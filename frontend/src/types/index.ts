@@ -421,3 +421,96 @@ export interface DocumentTemplate {
   createTime: string
 }
 
+/**
+ * 诉讼状态枚举
+ */
+export enum LitigationStatus {
+  PREPARING = 1, // 准备中
+  FILED = 2, // 已立案
+  IN_TRIAL = 3, // 审理中
+  JUDGMENT_ISSUED = 4, // 已判决
+  IN_EXECUTION = 5, // 执行中
+  EXECUTED = 6, // 已执行
+  CLOSED = 7, // 已结案
+}
+
+/**
+ * 诉讼阶段枚举
+ */
+export enum LitigationStage {
+  PREPARATION = 0, // 诉前准备
+  FILING = 1, // 立案审查
+  TRIAL = 2, // 开庭审理
+  JUDGMENT = 3, // 判决执行
+  EXECUTION = 4, // 强制执行
+  COMPLETED = 5, // 执行完毕
+}
+
+/**
+ * 诉讼案件
+ */
+export interface LitigationCase {
+  id: number
+  caseId: number
+  caseNumber: string
+  borrowerName: string
+  debtAmount: number
+  courtName: string
+  courtCaseNumber?: string
+  judgeName?: string
+  plaintiffLawyer?: string
+  status: LitigationStatus
+  stage: LitigationStage
+  progress: number
+  filingDate?: string
+  trialDate?: string
+  judgmentDate?: string
+  judgmentAmount?: number
+  recoveredAmount?: number
+  executionCourt?: string
+  caseDescription?: string
+  remarks?: string
+  createTime: string
+  updateTime?: string
+}
+
+/**
+ * 法院事件
+ */
+export interface CourtEvent {
+  id: number
+  caseId: number
+  type: string
+  title: string
+  scheduledTime: string
+  actualTime?: string
+  location?: string
+  description?: string
+  status: string
+  result?: string
+  operatorId: number
+  operatorName: string
+  createTime: string
+}
+
+/**
+ * 执行记录
+ */
+export interface ExecutionRecord {
+  id: number
+  caseId: number
+  type: string
+  title: string
+  content: string
+  amount?: number
+  executeTime: string
+  executorId: number
+  executorName: string
+  attachments?: Array<{
+    name: string
+    url: string
+    size: number
+  }>
+  createTime: string
+}
+
