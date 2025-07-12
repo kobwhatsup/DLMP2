@@ -9,10 +9,15 @@ import NotFound from '@/pages/NotFound'
 // 懒加载组件
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const UserManagement = lazy(() => import('@/pages/User/UserManagement'))
+const UserList = lazy(() => import('@/pages/User/UserList'))
+const RoleList = lazy(() => import('@/pages/User/RoleList'))
 const CaseManagement = lazy(() => import('@/pages/Case/CaseManagement'))
+const CaseList = lazy(() => import('@/pages/Case/CaseList'))
 const CaseDetail = lazy(() => import('@/pages/Case/CaseDetail'))
 const CaseImport = lazy(() => import('@/pages/Case/CaseImport'))
 const AssignmentManagement = lazy(() => import('@/pages/Assignment/AssignmentManagement'))
+const AssignmentRules = lazy(() => import('@/pages/Assignment/AssignmentRules'))
+const SmartAssignment = lazy(() => import('@/pages/Assignment/SmartAssignment'))
 const MediationManagement = lazy(() => import('@/pages/Mediation/MediationManagement'))
 const LitigationManagement = lazy(() => import('@/pages/Litigation/LitigationManagement'))
 const SettlementManagement = lazy(() => import('@/pages/Settlement/SettlementManagement'))
@@ -66,6 +71,22 @@ export const router = createBrowserRouter([
               </PageSuspense>
             ),
           },
+          {
+            path: 'list',
+            element: (
+              <PageSuspense>
+                <UserList />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'roles',
+            element: (
+              <PageSuspense>
+                <RoleList />
+              </PageSuspense>
+            ),
+          },
         ],
       },
       {
@@ -76,6 +97,14 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <CaseManagement />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'list',
+            element: (
+              <PageSuspense>
+                <CaseList />
               </PageSuspense>
             ),
           },
@@ -105,6 +134,22 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <AssignmentManagement />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'rules',
+            element: (
+              <PageSuspense>
+                <AssignmentRules />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'smart',
+            element: (
+              <PageSuspense>
+                <SmartAssignment />
               </PageSuspense>
             ),
           },

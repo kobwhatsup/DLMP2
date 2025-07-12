@@ -79,6 +79,13 @@ export const caseService = {
   },
 
   /**
+   * 分页查询案件列表（新接口）
+   */
+  getCaseList: (params: CaseQueryParams): Promise<PaginationData<Case>> => {
+    return http.get('/case/cases', { params })
+  },
+
+  /**
    * 根据ID获取案件详情
    */
   getCaseById: (id: number): Promise<Case> => {
@@ -154,4 +161,64 @@ export const caseService = {
     formData.append('file', file)
     return http.upload(`/case/cases/${caseId}/upload`, formData)
   },
+
+  /**
+   * 获取案件统计信息
+   */
+  getCaseStats: (): Promise<{
+    totalCount: number
+    pendingCount: number
+    inMediationCount: number
+    inLitigationCount: number
+    closedCount: number
+    totalAmount: number
+  }> => {
+    return http.get('/case/cases/stats')
+  },
+
+  /**
+   * 获取案件时间线
+   */
+  getCaseTimeline: (caseId: number): Promise<Array<{
+    id: number
+    action: string
+    description: string
+    operatorName: string
+    createTime: string
+  }>> => {
+    return http.get(`/case/cases/${caseId}/timeline`)
+  },
+
+  /**
+   * 添加案件备注
+   */
+  addCaseNote: (caseId: number, note: string): Promise<string> => {
+    return http.post(`/case/cases/${caseId}/notes`, { note })
+  },
+
+  /**
+   * 获取案件备注列表
+   */
+  getCaseNotes: (caseId: number): Promise<Array<{
+    id: number
+    note: string
+    operatorName: string
+    createTime: string
+  }>> => {
+    return http.get(`/case/cases/${caseId}/notes`)
+  },
+
+  /**
+   * 更新案件状态
+   */
+  updateCaseStatus: (caseId: number, status: number, reason?: string): Promise<string> => {
+    return http.put(`/case/cases/${caseId}/status`, { status, reason })
+  },
+
+  /**
+   * 批量删除案件
+   */
+  batchDeleteCases: (ids: number[]): Promise<string> => {
+    return http.delete('/case/cases/batch', { data: { ids } })
+  }
 }

@@ -3,8 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Form, Input, Button, Card, Typography, message, Checkbox } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { useAuthStore } from '@/stores'
-import { authService } from '@/services'
-import type { LoginParams } from '@/services'
+import { userService } from '@/services'
+import type { LoginRequest } from '@/types'
 
 const { Title, Text } = Typography
 
@@ -24,23 +24,16 @@ const Login: React.FC = () => {
   }, [isAuthenticated, navigate, location])
 
   // 处理登录
-  const handleLogin = async (values: LoginParams) => {
+  const handleLogin = async (values: LoginRequest) => {
     try {
       setLoading(true)
-      const response = await authService.login(values)
+      const response = await userService.login(values)
       
-      // 构造用户信息
-      const user = {
-        id: response.userId,
-        username: response.username,
-        realName: response.realName,
-        userType: response.userType,
-        status: 1,
-        createdTime: new Date().toISOString(),
-      }
+      // 获取用户详细信息
+      const userInfo = await userService.getCurrentUser()
 
       // 保存登录状态
-      login(user, response.token)
+      login(userInfo, response.token)
       
       message.success('登录成功')
       

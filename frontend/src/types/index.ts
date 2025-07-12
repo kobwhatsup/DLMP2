@@ -52,6 +52,7 @@ export enum UserType {
   MEDIATION_CENTER = 2, // 调解中心
   PLATFORM_OPERATOR = 3, // 平台运营方
   COURT = 4, // 法院用户
+  DEBTOR = 5, // 债务人
 }
 
 /**
@@ -59,14 +60,18 @@ export enum UserType {
  */
 export interface Case {
   id: number
-  caseNo: string
+  caseNumber: string
+  caseNo?: string
   batchNo?: string
   iouNumber?: string
   contractAmount?: number
-  debtorId: string
-  debtorName: string
+  debtorId?: string
+  borrowerName: string
+  debtorName?: string
   debtorIdCard: string
   debtorPhone?: string
+  phone?: string
+  address?: string
   gender?: number
   education?: string
   ethnicity?: string
@@ -86,17 +91,23 @@ export interface Case {
   loanProductType?: string
   loanDate?: string
   loanAmount?: number
+  debtAmount: number
   overduePrincipal?: number
   overdueInterest?: number
   overdueFees?: number
   overdueTotalAmount?: number
   overdueDays?: number
-  caseStatus: number
-  assignmentStatus: number
+  status: CaseStatus
+  caseStatus?: number
+  assignmentStatus?: number
   mediationCenterId?: number
   mediatorId?: number
-  clientId: number
-  createdTime: string
+  clientId?: number
+  clientName?: string
+  caseDescription?: string
+  assignTime?: string
+  createTime: string
+  createdTime?: string
   updatedTime?: string
 }
 
@@ -105,11 +116,13 @@ export interface Case {
  */
 export enum CaseStatus {
   PENDING_ASSIGNMENT = 1, // 待分案
-  IN_MEDIATION = 2, // 调解中
-  MEDIATION_SUCCESS = 3, // 调解成功
-  MEDIATION_FAILED = 4, // 调解失败
-  IN_LITIGATION = 5, // 诉讼中
-  CLOSED = 6, // 结案
+  ASSIGNED = 2, // 已分案
+  IN_MEDIATION = 3, // 调解中
+  MEDIATION_SUCCESS = 4, // 调解成功
+  MEDIATION_FAILED = 5, // 调解失败
+  IN_LITIGATION = 6, // 诉讼中
+  LITIGATION_SUCCESS = 7, // 诉讼成功
+  CLOSED = 8, // 结案
 }
 
 /**
@@ -169,3 +182,159 @@ export interface SearchParams extends PaginationParams {
   endTime?: string
   [key: string]: any
 }
+
+/**
+ * 角色信息类型
+ */
+export interface Role {
+  id: number
+  name: string
+  code: string
+  description?: string
+  permissions?: Permission[]
+  createTime: string
+  updateTime?: string
+}
+
+/**
+ * 权限信息类型
+ */
+export interface Permission {
+  id: number
+  name: string
+  code: string
+  module: string
+  description?: string
+  type: 'menu' | 'button' | 'api'
+  parentId?: number
+  children?: Permission[]
+}
+
+/**
+ * 用户状态枚举
+ */
+export enum UserStatus {
+  ACTIVE = 1, // 启用
+  INACTIVE = 0, // 禁用
+}
+
+/**
+ * 登录请求参数
+ */
+export interface LoginRequest {
+  username: string
+  password: string
+  remember?: boolean
+}
+
+/**
+ * 登录响应数据
+ */
+export interface LoginResponse {
+  token: string
+  refreshToken: string
+  userId: number
+  username: string
+  realName: string
+  userType: number
+  expiresIn: number
+}
+
+/**
+ * 分案规则条件
+ */
+export interface RuleCondition {
+  field: string
+  operator: string
+  value: string
+  logic: 'AND' | 'OR'
+}
+
+/**
+ * 分案规则动作
+ */
+export interface RuleAction {
+  type: string
+  target: string
+  weight: number
+}
+
+/**
+ * 分案规则
+ */
+export interface AssignmentRule {
+  id: number
+  name: string
+  description?: string
+  priority: number
+  status: 'active' | 'inactive'
+  conditions: RuleCondition[]
+  actions: RuleAction[]
+  executeCount: number
+  successRate: number
+  createTime: string
+  updateTime?: string
+}
+
+/**
+ * 分案任务
+ */
+export interface AssignmentTask {
+  id: number
+  name: string
+  strategy: 'rule_based' | 'load_balance' | 'random' | 'manual'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  progress: number
+  totalCount: number
+  successCount: number
+  failCount: number
+  startTime?: string
+  endTime?: string
+  createTime: string
+  executorId: number
+  executorName: string
+  config?: any
+  errorMessage?: string
+}
+
+/**
+ * 调解中心
+ */
+export interface MediationCenter {
+  id: number
+  name: string
+  code: string
+  address?: string
+  contactPerson?: string
+  contactPhone?: string
+  status: number
+  capacity: number
+  currentLoad: number
+  workloadRate: number
+  createTime: string
+}
+
+/**
+ * 调解员
+ */
+export interface Mediator {
+  id: number
+  name: string
+  phone?: string
+  email?: string
+  mediationCenterId: number
+  mediationCenterName: string
+  specialty?: string[]
+  level: number
+  status: number
+  maxCases: number
+  currentCases: number
+  workloadRate: number
+  performance: {
+    successRate: number
+    avgProcessTime: number
+    satisfactionScore: number
+  }
+  createTime: string
+}
+
