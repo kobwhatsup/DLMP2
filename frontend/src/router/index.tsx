@@ -19,6 +19,8 @@ const AssignmentManagement = lazy(() => import('@/pages/Assignment/AssignmentMan
 const AssignmentRules = lazy(() => import('@/pages/Assignment/AssignmentRules'))
 const SmartAssignment = lazy(() => import('@/pages/Assignment/SmartAssignment'))
 const MediationManagement = lazy(() => import('@/pages/Mediation/MediationManagement'))
+const MediationList = lazy(() => import('@/pages/Mediation/MediationList'))
+const MediationProcess = lazy(() => import('@/pages/Mediation/MediationProcess'))
 const LitigationManagement = lazy(() => import('@/pages/Litigation/LitigationManagement'))
 const SettlementManagement = lazy(() => import('@/pages/Settlement/SettlementManagement'))
 const NotificationCenter = lazy(() => import('@/pages/Notification/NotificationCenter'))
@@ -163,6 +165,22 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <MediationManagement />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'list',
+            element: (
+              <PageSuspense>
+                <MediationList />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'process/:id',
+            element: (
+              <PageSuspense>
+                <MediationProcess />
               </PageSuspense>
             ),
           },

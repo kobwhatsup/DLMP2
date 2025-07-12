@@ -338,3 +338,86 @@ export interface Mediator {
   createTime: string
 }
 
+/**
+ * 调解状态枚举
+ */
+export enum MediationStatus {
+  PENDING = 1, // 待开始
+  IN_PROGRESS = 2, // 进行中
+  SUCCESS = 3, // 调解成功
+  FAILED = 4, // 调解失败
+  SUSPENDED = 5, // 已暂停
+}
+
+/**
+ * 调解案件
+ */
+export interface MediationCase {
+  id: number
+  caseId: number
+  caseNumber: string
+  borrowerName: string
+  debtAmount: number
+  phone: string
+  address?: string
+  mediatorId: number
+  mediatorName: string
+  mediationCenterId: number
+  mediationCenterName: string
+  status: MediationStatus
+  currentStep: number
+  progress: number
+  startTime?: string
+  deadline?: string
+  mediationMethod?: string
+  mediationLocation?: string
+  appointmentTime?: string
+  expectedDuration?: number
+  mediationPlan?: string
+  remarks?: string
+  description?: string
+  createTime: string
+  updateTime?: string
+}
+
+/**
+ * 调解记录
+ */
+export interface MediationRecord {
+  id: number
+  caseId: number
+  type: string
+  title: string
+  content: string
+  contactTime?: string
+  operatorId: number
+  operatorName: string
+  attachments?: Array<{
+    name: string
+    url: string
+    size: number
+  }>
+  createTime: string
+}
+
+/**
+ * 文书模板
+ */
+export interface DocumentTemplate {
+  id: number
+  name: string
+  description: string
+  type: string
+  category: string
+  template: string
+  variables: Array<{
+    name: string
+    label: string
+    type: string
+    required: boolean
+    defaultValue?: any
+  }>
+  status: number
+  createTime: string
+}
+
