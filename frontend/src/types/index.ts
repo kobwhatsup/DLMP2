@@ -578,6 +578,232 @@ export interface FeeDetail {
 }
 
 /**
+ * 系统配置类型枚举
+ */
+export enum SystemConfigType {
+  SYSTEM = 1, // 系统基础配置
+  SECURITY = 2, // 安全配置
+  NOTIFICATION = 3, // 通知配置
+  STORAGE = 4, // 存储配置
+  INTEGRATION = 5, // 第三方集成
+  BUSINESS = 6, // 业务配置
+}
+
+/**
+ * 系统配置
+ */
+export interface SystemConfig {
+  id: number
+  configKey: string
+  configValue: string
+  configType: SystemConfigType
+  configName: string
+  description?: string
+  valueType: 'string' | 'number' | 'boolean' | 'json' | 'array'
+  isEncrypted: boolean
+  isPublic: boolean
+  validationRule?: string
+  defaultValue?: string
+  category: string
+  sortOrder: number
+  isActive: boolean
+  createTime: string
+  updateTime?: string
+  updatedBy?: string
+}
+
+/**
+ * 系统参数分组
+ */
+export interface SystemConfigGroup {
+  category: string
+  categoryName: string
+  description?: string
+  icon?: string
+  sortOrder: number
+  configs: SystemConfig[]
+}
+
+/**
+ * 数据字典
+ */
+export interface DataDictionary {
+  id: number
+  dictType: string
+  dictName: string
+  dictCode: string
+  dictValue: string
+  description?: string
+  sortOrder: number
+  isActive: boolean
+  parentId?: number
+  children?: DataDictionary[]
+  createTime: string
+  updateTime?: string
+}
+
+/**
+ * 数据字典类型
+ */
+export interface DictType {
+  id: number
+  typeCode: string
+  typeName: string
+  description?: string
+  isSystem: boolean
+  isActive: boolean
+  itemCount: number
+  createTime: string
+}
+
+/**
+ * 操作日志
+ */
+export interface OperationLog {
+  id: number
+  userId: number
+  userName: string
+  module: string
+  operation: string
+  method: string
+  requestUrl: string
+  requestParams?: string
+  responseData?: string
+  clientIp: string
+  userAgent: string
+  location?: string
+  executionTime: number
+  status: 'success' | 'failure'
+  errorMessage?: string
+  createTime: string
+}
+
+/**
+ * 登录日志
+ */
+export interface LoginLog {
+  id: number
+  userId: number
+  userName: string
+  loginType: 'web' | 'mobile' | 'api'
+  clientIp: string
+  userAgent: string
+  location?: string
+  loginTime: string
+  logoutTime?: string
+  status: 'success' | 'failure'
+  failureReason?: string
+}
+
+/**
+ * 系统监控信息
+ */
+export interface SystemMonitor {
+  serverInfo: {
+    hostname: string
+    os: string
+    architecture: string
+    javaVersion: string
+    serverTime: string
+    uptime: string
+  }
+  cpuInfo: {
+    usage: number
+    cores: number
+    systemUsage: number
+    userUsage: number
+  }
+  memoryInfo: {
+    totalMemory: number
+    usedMemory: number
+    freeMemory: number
+    usage: number
+  }
+  diskInfo: {
+    totalSpace: number
+    usedSpace: number
+    freeSpace: number
+    usage: number
+  }
+  networkInfo: {
+    downloadSpeed: number
+    uploadSpeed: number
+    totalDownload: number
+    totalUpload: number
+  }
+  applicationInfo: {
+    activeUsers: number
+    totalRequests: number
+    errorRequests: number
+    avgResponseTime: number
+  }
+}
+
+/**
+ * 安全设置
+ */
+export interface SecuritySettings {
+  passwordPolicy: {
+    minLength: number
+    requireUppercase: boolean
+    requireLowercase: boolean
+    requireNumbers: boolean
+    requireSpecialChars: boolean
+    maxAge: number
+    historyCount: number
+  }
+  loginSettings: {
+    maxFailAttempts: number
+    lockoutDuration: number
+    sessionTimeout: number
+    multipleLoginAllowed: boolean
+    requireCaptcha: boolean
+  }
+  ipWhitelist: string[]
+  ipBlacklist: string[]
+  enableTwoFactor: boolean
+  allowedFileTypes: string[]
+  maxUploadSize: number
+}
+
+/**
+ * 备份记录
+ */
+export interface BackupRecord {
+  id: number
+  backupName: string
+  backupType: 'full' | 'incremental' | 'differential'
+  backupSize: number
+  filePath: string
+  status: 'running' | 'completed' | 'failed'
+  startTime: string
+  endTime?: string
+  duration?: number
+  errorMessage?: string
+  createdBy: string
+}
+
+/**
+ * 系统健康检查
+ */
+export interface HealthCheck {
+  overall: 'healthy' | 'warning' | 'critical'
+  checks: Array<{
+    name: string
+    status: 'healthy' | 'warning' | 'critical'
+    message: string
+    details?: any
+    lastCheck: string
+  }>
+  metrics: {
+    responseTime: number
+    errorRate: number
+    throughput: number
+    availability: number
+  }
+}
+
+/**
  * 通知状态枚举
  */
 export enum NotificationStatus {
