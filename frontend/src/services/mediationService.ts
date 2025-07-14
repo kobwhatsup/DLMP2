@@ -79,6 +79,37 @@ export interface CompleteMediationParams {
   remarks?: string
 }
 
+// 新建调解案件参数
+export interface CreateMediationCaseParams {
+  borrowerName: string
+  amount: number
+  debtorIdCard?: string
+  debtorPhone?: string
+  clientName?: string
+  mediatorId?: number
+  mediatorName?: string
+  mediationCenterId?: number
+  mediationCenterName?: string
+  mediationMethod?: 'online' | 'offline' | 'phone'
+  mediationLocation?: string
+  appointmentTime?: string
+  expectedDuration?: number
+  mediationPlan?: string
+  remarks?: string
+  createFromCase?: boolean
+}
+
+// 从现有案件创建调解案件参数
+export interface CreateFromCaseParams {
+  caseId: number
+  mediatorId: number
+  mediationCenterId: number
+  mediationMethod?: 'online' | 'offline' | 'phone'
+  appointmentTime?: string
+  mediationPlan?: string
+  remarks?: string
+}
+
 /**
  * 调解管理相关API
  */
@@ -89,6 +120,27 @@ export const mediationService = {
    */
   getMediationList: (params: MediationQueryParams): Promise<PaginationData<MediationCase>> => {
     return http.get('/mediation/cases', { params })
+  },
+
+  /**
+   * 创建新的调解案件
+   */
+  createMediationCase: (params: CreateMediationCaseParams): Promise<{ data: MediationCase }> => {
+    return http.post('/mediation/cases', params)
+  },
+
+  /**
+   * 从现有案件创建调解案件
+   */
+  createFromCase: (params: CreateFromCaseParams): Promise<{ data: MediationCase }> => {
+    return http.post('/mediation/cases/from-case', params)
+  },
+
+  /**
+   * 获取可用于创建调解的案件列表
+   */
+  getAvailableCases: (params: { page: number, size: number, search?: string }): Promise<PaginationData<Case>> => {
+    return http.get('/mediation/available-cases', { params })
   },
 
   /**

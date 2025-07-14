@@ -170,3 +170,64 @@ body {
   background-color: #fff2f0;
   border: 1px solid #ffccc7;
 }
+
+/* 布局样式修复 */
+.ant-layout {
+  background: #f0f2f5;
+}
+
+.ant-layout-sider {
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow: auto;
+  height: 100vh;
+}
+
+.ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 确保主要内容区域不被侧边栏遮挡 */
+.ant-layout-has-sider > .ant-layout {
+  margin-left: 240px;
+  transition: margin-left 0.2s ease;
+}
+
+.ant-layout-has-sider > .ant-layout.layout-collapsed {
+  margin-left: 80px;
+}
+
+/* 修复可能的层级问题 */
+.ant-layout-header {
+  position: relative;
+  z-index: 10;
+}
+
+/* 案件导入表格行背景色 */
+.bg-red-50 {
+  background-color: #fff2f0 !important;
+}
+
+.bg-orange-50 {
+  background-color: #fff7e6 !important;
+}
+
+.bg-green-50 {
+  background-color: #f6ffed !important;
+}
+
+/* 导入步骤样式 */
+.ant-steps-item-finish .ant-steps-item-icon {
+  background-color: #52c41a;
+  border-color: #52c41a;
+}
+
+.ant-steps-item-process .ant-steps-item-icon {
+  background-color: #1890ff;
+  border-color: #1890ff;
+}

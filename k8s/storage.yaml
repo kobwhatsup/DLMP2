@@ -1,0 +1,486 @@
+# DLMP Kubernetes存储配置
+# PersistentVolume和StorageClass配置
+
+# 高性能SSD存储类
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+  labels:
+    storage-type: ssd
+    performance: high
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "125"
+  fsType: ext4
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+
+---
+# 标准存储类
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard
+  labels:
+    storage-type: standard
+    performance: medium
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+  fsType: ext4
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+
+---
+# 大容量存储类（用于日志、备份等）
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: bulk-storage
+  labels:
+    storage-type: hdd
+    performance: low
+    capacity: high
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: sc1  # Cold HDD
+  fsType: ext4
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+
+---
+# 网络文件系统存储类（用于共享存储）
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: shared-storage
+  labels:
+    storage-type: nfs
+    access-mode: shared
+provisioner: kubernetes.io/aws-efs
+parameters:
+  provisioningMode: efs-utils
+  fileSystemId: fs-12345678  # 替换为实际的EFS文件系统ID
+  directoryPerms: "0755"
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+
+---
+# DLMP后端应用数据PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dlmp-backend-data
+  namespace: dlmp-production
+  labels:
+    app: dlmp-backend
+    environment: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# DLMP文件上传存储PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dlmp-uploads
+  namespace: dlmp-production
+  labels:
+    app: dlmp
+    environment: production
+    usage: uploads
+spec:
+  accessModes:
+    - ReadWriteMany  # 多Pod共享访问
+  storageClassName: shared-storage
+  resources:
+    requests:
+      storage: 500Gi
+
+---
+# 日志存储PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dlmp-logs
+  namespace: dlmp-production
+  labels:
+    app: dlmp
+    environment: production
+    usage: logs
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: bulk-storage
+  resources:
+    requests:
+      storage: 200Gi
+
+---
+# 备份存储PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dlmp-backup
+  namespace: dlmp-production
+  labels:
+    app: dlmp
+    environment: production
+    usage: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: bulk-storage
+  resources:
+    requests:
+      storage: 1Ti
+
+---
+# 临时数据存储PVC（用于数据处理等）
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dlmp-temp
+  namespace: dlmp-production
+  labels:
+    app: dlmp
+    environment: production
+    usage: temporary
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# 静态PV示例（预先创建的存储）
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dlmp-static-storage
+  labels:
+    type: local
+    app: dlmp
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: fast-ssd
+  hostPath:
+    path: /mnt/dlmp-data
+    type: DirectoryOrCreate
+
+---
+# 备份存储PV（NFS）
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dlmp-backup-nfs
+  labels:
+    type: nfs
+    usage: backup
+spec:
+  capacity:
+    storage: 2Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: shared-storage
+  nfs:
+    server: nfs-server.example.com
+    path: /exports/dlmp/backup
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+    - rsize=1048576
+    - wsize=1048576
+    - timeo=600
+    - retrans=2
+
+---
+# 监控存储PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-storage
+  namespace: dlmp-monitoring
+  labels:
+    app: prometheus
+    environment: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-storage
+  namespace: dlmp-monitoring
+  labels:
+    app: grafana
+    environment: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-storage
+  namespace: dlmp-monitoring
+  labels:
+    app: elasticsearch
+    environment: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: fast-ssd
+  resources:
+    requests:
+      storage: 200Gi
+
+---
+# VolumeSnapshot类（用于备份）
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: csi-aws-vsc
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: ebs.csi.aws.com
+deletionPolicy: Retain
+parameters:
+  description: "DLMP EBS Snapshot"
+
+---
+# 定期备份VolumeSnapshot
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-master-snapshot
+  namespace: dlmp-production
+  labels:
+    app: mysql
+    backup-type: scheduled
+    backup-date: "2024-01-01"
+spec:
+  volumeSnapshotClassName: csi-aws-vsc
+  source:
+    persistentVolumeClaimName: data-mysql-master-0
+
+---
+# 存储配额限制
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: storage-quota
+  namespace: dlmp-production
+spec:
+  hard:
+    requests.storage: 2Ti
+    persistentvolumeclaims: 20
+    requests.ephemeral-storage: 50Gi
+    limits.ephemeral-storage: 100Gi
+
+---
+# 存储监控ServiceMonitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: storage-monitor
+  namespace: dlmp-monitoring
+  labels:
+    app: storage-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+
+---
+# 存储清理CronJob
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: storage-cleanup
+  namespace: dlmp-production
+  labels:
+    app: storage-cleanup
+spec:
+  schedule: "0 2 * * 0"  # 每周日凌晨2点
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: cleanup
+              image: alpine:3.18
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  
+                  echo "开始存储清理任务..."
+                  
+                  # 清理临时文件（超过7天）
+                  find /tmp -type f -mtime +7 -delete || true
+                  
+                  # 清理应用临时数据（超过30天）
+                  find /app/temp -type f -mtime +30 -delete || true
+                  
+                  # 清理日志文件（超过90天）
+                  find /app/logs -name "*.log.*" -mtime +90 -delete || true
+                  
+                  # 压缩旧日志文件（超过7天且未压缩）
+                  find /app/logs -name "*.log" -mtime +7 ! -name "*.gz" -exec gzip {} \;
+                  
+                  echo "存储清理任务完成"
+              
+              volumeMounts:
+                - name: temp-data
+                  mountPath: /tmp
+                - name: app-data
+                  mountPath: /app
+                - name: logs-data
+                  mountPath: /app/logs
+              
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "50m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "100m"
+          
+          volumes:
+            - name: temp-data
+              persistentVolumeClaim:
+                claimName: dlmp-temp
+            - name: app-data
+              persistentVolumeClaim:
+                claimName: dlmp-backend-data
+            - name: logs-data
+              persistentVolumeClaim:
+                claimName: dlmp-logs
+          
+          restartPolicy: OnFailure
+  
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+
+---
+# 存储扩容Job（手动触发）
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: storage-expansion
+  namespace: dlmp-production
+  labels:
+    app: storage-management
+    operation: expansion
+spec:
+  template:
+    metadata:
+      labels:
+        app: storage-management
+        operation: expansion
+    spec:
+      containers:
+        - name: expand-storage
+          image: alpine:3.18
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              
+              echo "检查存储使用情况..."
+              
+              # 检查各个PVC的使用情况
+              df -h /data
+              df -h /uploads
+              df -h /logs
+              df -h /backup
+              
+              echo "存储检查完成"
+              
+              # 如果需要扩容，可以在这里添加扩容逻辑
+              # kubectl patch pvc dlmp-backend-data -p '{"spec":{"resources":{"requests":{"storage":"100Gi"}}}}'
+          
+          volumeMounts:
+            - name: backend-data
+              mountPath: /data
+            - name: uploads-data
+              mountPath: /uploads
+            - name: logs-data
+              mountPath: /logs
+            - name: backup-data
+              mountPath: /backup
+          
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+      
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: dlmp-backend-data
+        - name: uploads-data
+          persistentVolumeClaim:
+            claimName: dlmp-uploads
+        - name: logs-data
+          persistentVolumeClaim:
+            claimName: dlmp-logs
+        - name: backup-data
+          persistentVolumeClaim:
+            claimName: dlmp-backup
+      
+      restartPolicy: Never
+  
+  backoffLimit: 3

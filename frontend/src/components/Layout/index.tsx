@@ -14,12 +14,24 @@ const Layout: React.FC = () => {
   const { isAuthenticated } = useAuthStore()
   const { sidebarCollapsed, setSelectedMenuKey, setBreadcrumbs } = useAppStore()
 
-  // 检查登录状态
+  // 自动设置默认登录状态 (开发模式)
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate('/login', { replace: true })
+      // 开发模式下自动登录
+      const { login } = useAuthStore.getState()
+      login({
+        id: 1,
+        username: 'admin',
+        realName: '系统管理员',
+        phone: '18888888888',
+        email: 'admin@dlmp.com',
+        userType: 1,
+        status: 1,
+        createdTime: '2024-01-01 00:00:00',
+        updatedTime: '2024-07-13 21:00:00'
+      }, 'dev-mock-token')
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated])
 
   // 根据路由更新菜单状态
   useEffect(() => {
@@ -58,14 +70,17 @@ const Layout: React.FC = () => {
     // 可以继续添加其他路由的处理...
   }, [location.pathname, setSelectedMenuKey, setBreadcrumbs])
 
-  if (!isAuthenticated) {
-    return null
-  }
 
   return (
-    <AntLayout style={{ minHeight: '100vh' }}>
+    <AntLayout style={{ minHeight: '100vh' }} hasSider>
       <Sidebar />
-      <AntLayout className={sidebarCollapsed ? 'layout-collapsed' : ''}>
+      <AntLayout 
+        className={sidebarCollapsed ? 'layout-collapsed' : ''}
+        style={{ 
+          marginLeft: sidebarCollapsed ? 80 : 240,
+          transition: 'margin-left 0.2s ease'
+        }}
+      >
         <Header />
         <Content style={{ margin: '0 16px' }}>
           <Breadcrumb />

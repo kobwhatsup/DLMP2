@@ -12,8 +12,8 @@ const Sidebar: React.FC = () => {
   const { user } = useAuthStore()
   const { sidebarCollapsed, selectedMenuKey } = useAppStore()
 
-  // 根据用户权限过滤菜单
-  const userRole = user?.userType === 3 ? 'admin' : 'user'
+  // 根据用户权限过滤菜单  
+  const userRole = user?.userType === 1 ? 'admin' : 'user'
   const filteredMenus = filterMenuByPermission(menuConfig, userRole)
 
   // 将菜单配置转换为Ant Design Menu组件需要的格式
@@ -78,6 +78,7 @@ const Sidebar: React.FC = () => {
       collapsible
       collapsed={sidebarCollapsed}
       width={240}
+      collapsedWidth={80}
       style={{
         overflow: 'auto',
         height: '100vh',
@@ -85,6 +86,7 @@ const Sidebar: React.FC = () => {
         left: 0,
         top: 0,
         bottom: 0,
+        zIndex: 100,
       }}
       theme='dark'
     >

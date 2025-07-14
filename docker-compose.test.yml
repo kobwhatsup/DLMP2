@@ -1,0 +1,227 @@
+version: '3.8'
+
+services:
+  # 前端测试服务
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile
+      target: builder
+    container_name: dlmp-frontend-test
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=test
+      - API_BASE_URL=http://backend-test:8080
+      - WS_URL=ws://backend-test:8080
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - backend-test
+      - redis-test
+      - mysql-test
+    networks:
+      - dlmp-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 后端测试服务
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dlmp-backend-test
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=test
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-test:3306/dlmp_test
+      - SPRING_DATASOURCE_USERNAME=dlmp_test
+      - SPRING_DATASOURCE_PASSWORD=dlmp_test_pass
+      - SPRING_REDIS_HOST=redis-test
+      - SPRING_REDIS_PORT=6379
+      - JAVA_OPTS=-Xmx256m -Xms128m
+      - LOGGING_LEVEL_ROOT=INFO
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - dlmp-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # MySQL测试数据库
+  mysql-test:
+    image: mysql:8.0
+    container_name: dlmp-mysql-test
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_test_pass
+      - MYSQL_DATABASE=dlmp_test
+      - MYSQL_USER=dlmp_test
+      - MYSQL_PASSWORD=dlmp_test_pass
+      - MYSQL_ROOT_HOST=%
+    volumes:
+      - mysql-test-data:/var/lib/mysql
+      - ./scripts/test-data.sql:/docker-entrypoint-initdb.d/01-test-data.sql:ro
+      - ./backend/src/main/resources/db/migration:/docker-entrypoint-initdb.d/migrations:ro
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=64M
+      --innodb-log-file-size=16M
+    networks:
+      - dlmp-test-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "dlmp_test", "-pdlmp_test_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis测试缓存
+  redis-test:
+    image: redis:7-alpine
+    container_name: dlmp-redis-test
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 64mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-test-data:/data
+    networks:
+      - dlmp-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Nginx负载均衡测试
+  nginx-test:
+    image: nginx:alpine
+    container_name: dlmp-nginx-test
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx-test.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend-test
+      - backend-test
+    networks:
+      - dlmp-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 测试数据库管理工具
+  adminer-test:
+    image: adminer:latest
+    container_name: dlmp-adminer-test
+    ports:
+      - "8081:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=mysql-test
+    depends_on:
+      - mysql-test
+    networks:
+      - dlmp-test-network
+
+  # 监控和日志收集（测试环境）
+  prometheus-test:
+    image: prom/prometheus:latest
+    container_name: dlmp-prometheus-test
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-test.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=24h'
+      - '--web.enable-lifecycle'
+    networks:
+      - dlmp-test-network
+
+  grafana-test:
+    image: grafana/grafana:latest
+    container_name: dlmp-grafana-test
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=test123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-test-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus-test
+    networks:
+      - dlmp-test-network
+
+  # 邮件服务器测试（MailHog）
+  mailhog-test:
+    image: mailhog/mailhog:latest
+    container_name: dlmp-mailhog-test
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - dlmp-test-network
+
+  # 文件存储测试（MinIO）
+  minio-test:
+    image: minio/minio:latest
+    container_name: dlmp-minio-test
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=testuser
+      - MINIO_ROOT_PASSWORD=testpass123
+    volumes:
+      - minio-test-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - dlmp-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+networks:
+  dlmp-test-network:
+    driver: bridge
+    name: dlmp-test-network
+
+volumes:
+  mysql-test-data:
+    driver: local
+  redis-test-data:
+    driver: local
+  grafana-test-data:
+    driver: local
+  minio-test-data:
+    driver: local

@@ -116,8 +116,8 @@ export const caseService = {
   /**
    * 批量导入案件
    */
-  batchImportCases: (cases: CreateCaseParams[]): Promise<string> => {
-    return http.post('/case/cases/batch-import', cases)
+  batchImportCases: (cases: CreateCaseParams[]): Promise<any> => {
+    return http.post('/case/cases/batch-import', { cases })
   },
 
   /**

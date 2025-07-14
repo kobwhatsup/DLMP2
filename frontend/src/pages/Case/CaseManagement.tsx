@@ -165,9 +165,30 @@ const CaseManagement: React.FC = () => {
         size: pagination.pageSize,
         ...params,
       })
-      setCaseList(response)
+      
+      if (response) {
+        setCaseList(response)
+      } else {
+        // 如果没有数据，使用空数据结构
+        setCaseList({
+          records: [],
+          total: 0,
+          size: pagination.pageSize,
+          current: pagination.current,
+          pages: 0
+        })
+      }
     } catch (error) {
-      message.error('加载案件数据失败')
+      console.error('加载案件数据失败:', error)
+      message.error('加载案件数据失败，请检查网络连接')
+      // 设置空数据避免页面崩溃
+      setCaseList({
+        records: [],
+        total: 0,
+        size: pagination.pageSize,
+        current: pagination.current,
+        pages: 0
+      })
     } finally {
       setLoading(false)
     }

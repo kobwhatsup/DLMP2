@@ -1,0 +1,294 @@
+version: '3.8'
+
+# Redis集群配置
+# 6节点Redis集群 (3主3从)
+
+services:
+  redis-node-1:
+    image: redis:7.0-alpine
+    container_name: redis-node-1
+    hostname: redis-node-1
+    restart: unless-stopped
+    ports:
+      - "7001:6379"
+      - "17001:16379"
+    volumes:
+      - ./config/redis-1.conf:/etc/redis/redis.conf
+      - ./data/redis-1:/data
+      - ./logs:/var/log/redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    networks:
+      - redis-cluster
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis-node-2:
+    image: redis:7.0-alpine
+    container_name: redis-node-2
+    hostname: redis-node-2
+    restart: unless-stopped
+    ports:
+      - "7002:6379"
+      - "17002:16379"
+    volumes:
+      - ./config/redis-2.conf:/etc/redis/redis.conf
+      - ./data/redis-2:/data
+      - ./logs:/var/log/redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    networks:
+      - redis-cluster
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis-node-3:
+    image: redis:7.0-alpine
+    container_name: redis-node-3
+    hostname: redis-node-3
+    restart: unless-stopped
+    ports:
+      - "7003:6379"
+      - "17003:16379"
+    volumes:
+      - ./config/redis-3.conf:/etc/redis/redis.conf
+      - ./data/redis-3:/data
+      - ./logs:/var/log/redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    networks:
+      - redis-cluster
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis-node-4:
+    image: redis:7.0-alpine
+    container_name: redis-node-4
+    hostname: redis-node-4
+    restart: unless-stopped
+    ports:
+      - "7004:6379"
+      - "17004:16379"
+    volumes:
+      - ./config/redis-4.conf:/etc/redis/redis.conf
+      - ./data/redis-4:/data
+      - ./logs:/var/log/redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    networks:
+      - redis-cluster
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis-node-5:
+    image: redis:7.0-alpine
+    container_name: redis-node-5
+    hostname: redis-node-5
+    restart: unless-stopped
+    ports:
+      - "7005:6379"
+      - "17005:16379"
+    volumes:
+      - ./config/redis-5.conf:/etc/redis/redis.conf
+      - ./data/redis-5:/data
+      - ./logs:/var/log/redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    networks:
+      - redis-cluster
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis-node-6:
+    image: redis:7.0-alpine
+    container_name: redis-node-6
+    hostname: redis-node-6
+    restart: unless-stopped
+    ports:
+      - "7006:6379"
+      - "17006:16379"
+    volumes:
+      - ./config/redis-6.conf:/etc/redis/redis.conf
+      - ./data/redis-6:/data
+      - ./logs:/var/log/redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    networks:
+      - redis-cluster
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis集群初始化工具
+  redis-cluster-init:
+    image: redis:7.0-alpine
+    container_name: redis-cluster-init
+    restart: "no"
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    networks:
+      - redis-cluster
+    volumes:
+      - ./scripts:/scripts
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    command: /bin/sh /scripts/init-cluster.sh
+
+  # Redis哨兵 (可选，用于单机模式的高可用)
+  redis-sentinel-1:
+    image: redis:7.0-alpine
+    container_name: redis-sentinel-1
+    hostname: redis-sentinel-1
+    restart: unless-stopped
+    ports:
+      - "26379:26379"
+    volumes:
+      - ./config/sentinel-1.conf:/etc/redis/sentinel.conf
+      - ./logs:/var/log/redis
+    command: ["redis-sentinel", "/etc/redis/sentinel.conf"]
+    networks:
+      - redis-cluster
+    depends_on:
+      - redis-node-1
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    profiles:
+      - sentinel
+
+  redis-sentinel-2:
+    image: redis:7.0-alpine
+    container_name: redis-sentinel-2
+    hostname: redis-sentinel-2
+    restart: unless-stopped
+    ports:
+      - "26380:26379"
+    volumes:
+      - ./config/sentinel-2.conf:/etc/redis/sentinel.conf
+      - ./logs:/var/log/redis
+    command: ["redis-sentinel", "/etc/redis/sentinel.conf"]
+    networks:
+      - redis-cluster
+    depends_on:
+      - redis-node-1
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    profiles:
+      - sentinel
+
+  redis-sentinel-3:
+    image: redis:7.0-alpine
+    container_name: redis-sentinel-3
+    hostname: redis-sentinel-3
+    restart: unless-stopped
+    ports:
+      - "26381:26379"
+    volumes:
+      - ./config/sentinel-3.conf:/etc/redis/sentinel.conf
+      - ./logs:/var/log/redis
+    command: ["redis-sentinel", "/etc/redis/sentinel.conf"]
+    networks:
+      - redis-cluster
+    depends_on:
+      - redis-node-1
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+    profiles:
+      - sentinel
+
+  # Redis Exporter (Prometheus监控)
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis-exporter
+    hostname: redis-exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-node-1:6379,redis://redis-node-2:6379,redis://redis-node-3:6379,redis://redis-node-4:6379,redis://redis-node-5:6379,redis://redis-node-6:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123456}
+      - REDIS_EXPORTER_CHECK_KEYS=dlmp:*
+      - REDIS_EXPORTER_CHECK_SINGLE_KEYS=dlmp:health,dlmp:status
+    networks:
+      - redis-cluster
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+    profiles:
+      - monitoring
+
+  # Redis Commander (Web管理界面)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    hostname: redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=node1:redis-node-1:6379:0:${REDIS_PASSWORD:-redis123456},node2:redis-node-2:6379:0:${REDIS_PASSWORD:-redis123456},node3:redis-node-3:6379:0:${REDIS_PASSWORD:-redis123456}
+      - HTTP_USER=admin
+      - HTTP_PASSWORD=admin123
+    networks:
+      - redis-cluster
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+    profiles:
+      - management
+
+networks:
+  redis-cluster:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis-data-1:
+    driver: local
+  redis-data-2:
+    driver: local
+  redis-data-3:
+    driver: local
+  redis-data-4:
+    driver: local
+  redis-data-5:
+    driver: local
+  redis-data-6:
+    driver: local

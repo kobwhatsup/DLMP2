@@ -9,6 +9,46 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     css: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      exclude: [
+        'node_modules/',
+        'src/test/',
+        '**/*.d.ts',
+        '**/*.config.*',
+        'dist/',
+        'build/',
+        'coverage/',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/**/*.test.{ts,tsx}',
+        'src/**/*.spec.{ts,tsx}',
+        'src/**/__tests__/**'
+      ],
+      thresholds: {
+        global: {
+          branches: 75,
+          functions: 75,
+          lines: 75,
+          statements: 75
+        }
+      },
+      all: true,
+      include: ['src/**/*.{ts,tsx}']
+    },
+    testTimeout: 10000,
+    hookTimeout: 10000,
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: false
+      }
+    },
+    reporters: ['default', 'html'],
+    outputFile: {
+      html: './test-results/index.html'
+    }
   },
   resolve: {
     alias: {

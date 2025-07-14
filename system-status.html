@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLMP 系统状态检查</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #1890ff; text-align: center; margin-bottom: 30px; }
+        .status-card { margin: 15px 0; padding: 20px; border-radius: 6px; border-left: 4px solid #ddd; }
+        .success { border-color: #52c41a; background: #f6ffed; }
+        .error { border-color: #ff4d4f; background: #fff2f0; }
+        .warning { border-color: #faad14; background: #fffbe6; }
+        .status-title { font-weight: bold; margin-bottom: 8px; }
+        .status-detail { font-size: 14px; color: #666; }
+        .btn { display: inline-block; padding: 10px 20px; margin: 10px 5px; background: #1890ff; color: white; text-decoration: none; border-radius: 4px; cursor: pointer; border: none; }
+        .btn:hover { background: #40a9ff; }
+        .btn-success { background: #52c41a; }
+        .btn-success:hover { background: #73d13d; }
+        .loading { color: #1890ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏢 个贷不良资产分散诉讼调解平台</h1>
+        <h2>系统状态检查</h2>
+        
+        <div id="status-container">
+            <div class="status-card loading">
+                <div class="status-title">🔄 正在检查系统状态...</div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="btn" onclick="checkAll()">🔄 重新检查</button>
+            <a href="http://localhost:5173" class="btn btn-success" target="_blank">🚀 打开主系统</a>
+            <a href="http://localhost:5173/test-api.html" class="btn" target="_blank">🔧 API测试页面</a>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background: #f0f0f0; border-radius: 6px;">
+            <h3>📋 系统功能清单</h3>
+            <ul style="line-height: 1.8;">
+                <li>✅ <strong>工作台</strong> - 数据统计和快捷操作</li>
+                <li>✅ <strong>案件管理</strong> - 案件列表、导入、详情查看</li>
+                <li>✅ <strong>用户管理</strong> - 用户列表、权限管理</li>
+                <li>✅ <strong>智能分案</strong> - 自动分案规则和任务</li>
+                <li>✅ <strong>调解管理</strong> - 调解流程和文书管理</li>
+                <li>✅ <strong>诉讼管理</strong> - 诉讼跟踪和执行</li>
+                <li>✅ <strong>结算管理</strong> - 费用计算和报表</li>
+                <li>✅ <strong>通知中心</strong> - 消息通知和模板</li>
+                <li>✅ <strong>文件管理</strong> - 文件上传、分享、统计</li>
+                <li>✅ <strong>系统设置</strong> - 配置管理和监控</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function checkStatus(name, url, description) {
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    return {
+                        name,
+                        status: 'success',
+                        message: description + ' ✅',
+                        detail: data.message || `状态码: ${response.status}`
+                    };
+                }
+                throw new Error(`HTTP ${response.status}`);
+            } catch (error) {
+                return {
+                    name,
+                    status: 'error',
+                    message: description + ' ❌',
+                    detail: error.message
+                };
+            }
+        }
+
+        async function checkFrontend() {
+            try {
+                const response = await fetch('http://localhost:5173');
+                return {
+                    name: 'frontend',
+                    status: response.ok ? 'success' : 'error',
+                    message: response.ok ? '前端服务 ✅' : '前端服务 ❌',
+                    detail: response.ok ? '页面正常访问' : `HTTP ${response.status}`
+                };
+            } catch (error) {
+                return {
+                    name: 'frontend',
+                    status: 'error',
+                    message: '前端服务 ❌',
+                    detail: error.message
+                };
+            }
+        }
+
+        async function checkAll() {
+            const container = document.getElementById('status-container');
+            container.innerHTML = '<div class="status-card loading"><div class="status-title">🔄 正在检查系统状态...</div></div>';
+
+            const checks = [
+                checkFrontend(),
+                checkStatus('backend-health', 'http://localhost:8080/api/health', '后端健康检查'),
+                checkStatus('case-api', 'http://localhost:8080/case/cases?page=1&size=1', '案件API'),
+                checkStatus('user-api', 'http://localhost:8080/user/users?page=1&size=1', '用户API'),
+                checkStatus('auth-api', 'http://localhost:8080/user/auth/current', '认证API')
+            ];
+
+            const results = await Promise.all(checks);
+            
+            let html = '';
+            let allGood = true;
+            
+            results.forEach(result => {
+                const statusClass = result.status === 'success' ? 'success' : 'error';
+                if (result.status !== 'success') allGood = false;
+                
+                html += `
+                    <div class="status-card ${statusClass}">
+                        <div class="status-title">${result.message}</div>
+                        <div class="status-detail">${result.detail}</div>
+                    </div>
+                `;
+            });
+
+            if (allGood) {
+                html += `
+                    <div class="status-card success">
+                        <div class="status-title">🎉 系统运行正常！</div>
+                        <div class="status-detail">所有服务和API都正常工作，可以开始使用系统</div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // 页面加载时自动检查
+        window.onload = checkAll;
+    </script>
+</body>
+</html>

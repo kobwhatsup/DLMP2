@@ -1,0 +1,610 @@
+# DLMP StatefulSet配置
+# 用于MySQL和Redis等有状态服务
+
+# MySQL Master StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-master
+  namespace: dlmp-production
+  labels:
+    app: mysql
+    role: master
+    environment: production
+spec:
+  serviceName: mysql-master
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+      role: master
+  template:
+    metadata:
+      labels:
+        app: mysql
+        role: master
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9104"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: init-mysql
+          image: mysql:8.0
+          command:
+            - bash
+            - "-c"
+            - |
+              set -ex
+              # 生成server-id
+              echo [mysqld] > /mnt/conf.d/server-id.cnf
+              echo server-id=1 >> /mnt/conf.d/server-id.cnf
+              # 复制配置文件
+              cp /mnt/config-map/my.cnf /mnt/conf.d/
+          volumeMounts:
+            - name: conf
+              mountPath: /mnt/conf.d
+            - name: config-map
+              mountPath: /mnt/config-map
+      
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: dlmp
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_USERNAME
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_PASSWORD
+          
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+              subPath: mysql
+            - name: conf
+              mountPath: /etc/mysql/conf.d
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+          
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            exec:
+              command: ["mysql", "-h", "127.0.0.1", "-e", "SELECT 1"]
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 3
+        
+        # MySQL Exporter容器
+        - name: mysql-exporter
+          image: prom/mysqld-exporter:v0.14.0
+          env:
+            - name: DATA_SOURCE_NAME
+              value: "root:$(MYSQL_ROOT_PASSWORD)@(localhost:3306)/"
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_ROOT_PASSWORD
+          ports:
+            - name: metrics
+              containerPort: 9104
+              protocol: TCP
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+      
+      volumes:
+        - name: conf
+          emptyDir: {}
+        - name: config-map
+          configMap:
+            name: mysql-config
+        - name: initdb
+          secret:
+            secretName: mysql-init-script
+  
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 100Gi
+
+---
+# MySQL Slave StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-slave
+  namespace: dlmp-production
+  labels:
+    app: mysql
+    role: slave
+    environment: production
+spec:
+  serviceName: mysql-slave
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mysql
+      role: slave
+  template:
+    metadata:
+      labels:
+        app: mysql
+        role: slave
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9104"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: init-mysql
+          image: mysql:8.0
+          command:
+            - bash
+            - "-c"
+            - |
+              set -ex
+              # 生成server-id
+              [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+              ordinal=${BASH_REMATCH[1]}
+              echo [mysqld] > /mnt/conf.d/server-id.cnf
+              echo server-id=$((100 + $ordinal)) >> /mnt/conf.d/server-id.cnf
+              # 复制配置文件
+              cp /mnt/config-map/my.cnf /mnt/conf.d/
+              # 添加从服务器配置
+              echo read_only=1 >> /mnt/conf.d/server-id.cnf
+              echo super_read_only=1 >> /mnt/conf.d/server-id.cnf
+          volumeMounts:
+            - name: conf
+              mountPath: /mnt/conf.d
+            - name: config-map
+              mountPath: /mnt/config-map
+        
+        - name: clone-mysql
+          image: gcr.io/google-samples/xtrabackup:1.0
+          command:
+            - bash
+            - "-c"
+            - |
+              set -ex
+              # 如果数据目录为空，从主服务器克隆数据
+              if [[ -s /var/lib/mysql/mysql ]]; then
+                exit 0
+              fi
+              # 使用xtrabackup克隆数据
+              ncat --recv-only mysql-master-0.mysql-master 3307 | xbstream -x -C /var/lib/mysql
+              xtrabackup --prepare --target-dir=/var/lib/mysql
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+              subPath: mysql
+            - name: conf
+              mountPath: /etc/mysql/conf.d
+      
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: dlmp
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_USERNAME
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_PASSWORD
+          
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+              subPath: mysql
+            - name: conf
+              mountPath: /etc/mysql/conf.d
+          
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            exec:
+              command: ["mysql", "-h", "127.0.0.1", "-e", "SELECT 1"]
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 3
+        
+        - name: mysql-exporter
+          image: prom/mysqld-exporter:v0.14.0
+          env:
+            - name: DATA_SOURCE_NAME
+              value: "root:$(MYSQL_ROOT_PASSWORD)@(localhost:3306)/"
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_ROOT_PASSWORD
+          ports:
+            - name: metrics
+              containerPort: 9104
+              protocol: TCP
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+      
+      volumes:
+        - name: conf
+          emptyDir: {}
+        - name: config-map
+          configMap:
+            name: mysql-config
+  
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 100Gi
+
+---
+# Redis集群 StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: dlmp-production
+  labels:
+    app: redis
+    environment: production
+spec:
+  serviceName: redis-headless
+  replicas: 6
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: config
+          image: redis:7.0-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -ex
+              [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+              ordinal=${BASH_REMATCH[1]}
+              
+              # 复制基础配置
+              cp /mnt/config-map/redis.conf /etc/redis/redis.conf
+              
+              # 设置节点端口
+              echo "cluster-announce-ip redis-$ordinal.redis-headless.dlmp-production.svc.cluster.local" >> /etc/redis/redis.conf
+              
+              # 替换密码占位符
+              sed -i "s/\${REDIS_PASSWORD}/$REDIS_PASSWORD/g" /etc/redis/redis.conf
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-redis-secret
+                  key: REDIS_PASSWORD
+          volumeMounts:
+            - name: redis-config
+              mountPath: /etc/redis/
+            - name: config-map
+              mountPath: /mnt/config-map
+      
+      containers:
+        - name: redis
+          image: redis:7.0-alpine
+          command:
+            - redis-server
+            - /etc/redis/redis.conf
+          
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+            - name: cluster
+              containerPort: 16379
+              protocol: TCP
+          
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-redis-secret
+                  key: REDIS_PASSWORD
+          
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: redis-config
+              mountPath: /etc/redis/
+            - name: redis-logs
+              mountPath: /var/log/redis
+          
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+        
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.52.0
+          env:
+            - name: REDIS_ADDR
+              value: "redis://localhost:6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-redis-secret
+                  key: REDIS_PASSWORD
+          ports:
+            - name: metrics
+              containerPort: 9121
+              protocol: TCP
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+      
+      volumes:
+        - name: redis-config
+          emptyDir: {}
+        - name: config-map
+          configMap:
+            name: redis-config
+        - name: redis-logs
+          emptyDir: {}
+      
+      # Pod反亲和性确保分布
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - redis
+              topologyKey: kubernetes.io/hostname
+  
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 20Gi
+
+---
+# Redis集群初始化Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-cluster-init
+  namespace: dlmp-production
+  labels:
+    app: redis
+    job: cluster-init
+spec:
+  template:
+    metadata:
+      labels:
+        app: redis
+        job: cluster-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: redis-cluster-init
+          image: redis:7.0-alpine
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-redis-secret
+                  key: REDIS_PASSWORD
+          command:
+            - sh
+            - -c
+            - |
+              set -ex
+              
+              # 等待所有Redis节点启动
+              for i in {0..5}; do
+                until redis-cli -h redis-$i.redis-headless -a $REDIS_PASSWORD ping; do
+                  echo "Waiting for redis-$i to be ready..."
+                  sleep 5
+                done
+              done
+              
+              # 检查集群是否已经初始化
+              if redis-cli -h redis-0.redis-headless -a $REDIS_PASSWORD cluster info | grep -q "cluster_state:ok"; then
+                echo "Redis cluster already initialized"
+                exit 0
+              fi
+              
+              # 创建集群
+              redis-cli -a $REDIS_PASSWORD --cluster create \
+                redis-0.redis-headless.dlmp-production.svc.cluster.local:6379 \
+                redis-1.redis-headless.dlmp-production.svc.cluster.local:6379 \
+                redis-2.redis-headless.dlmp-production.svc.cluster.local:6379 \
+                redis-3.redis-headless.dlmp-production.svc.cluster.local:6379 \
+                redis-4.redis-headless.dlmp-production.svc.cluster.local:6379 \
+                redis-5.redis-headless.dlmp-production.svc.cluster.local:6379 \
+                --cluster-replicas 1 --cluster-yes
+              
+              echo "Redis cluster initialized successfully"
+      
+      # 等待Redis StatefulSet就绪
+      initContainers:
+        - name: wait-for-redis
+          image: busybox:1.35
+          command:
+            - sh
+            - -c
+            - |
+              set -ex
+              for i in {0..5}; do
+                until nslookup redis-$i.redis-headless.dlmp-production.svc.cluster.local; do
+                  echo "Waiting for redis-$i DNS to be ready..."
+                  sleep 5
+                done
+              done
+              echo "All Redis pods are ready"
+
+---
+# PodDisruptionBudget - 确保高可用
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mysql-master-pdb
+  namespace: dlmp-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mysql
+      role: master
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mysql-slave-pdb
+  namespace: dlmp-production
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: mysql
+      role: slave
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: dlmp-production
+spec:
+  maxUnavailable: 2
+  selector:
+    matchLabels:
+      app: redis

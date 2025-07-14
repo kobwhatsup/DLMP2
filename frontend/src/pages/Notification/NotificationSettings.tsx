@@ -18,7 +18,9 @@ import {
   Tabs,
   List,
   Avatar,
-  Tooltip
+  Tooltip,
+  Select,
+  Input
 } from 'antd'
 import {
   SaveOutlined,
@@ -33,15 +35,17 @@ import {
   DeleteOutlined
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { NotificationSettings, NotificationType, NotificationPriority } from '@/types'
+import type { NotificationSettings as NotificationSettingsType, NotificationType, NotificationPriority } from '@/types'
 import { notificationService } from '@/services'
 import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
 const { TabPane } = Tabs
+const { Option } = Select
+const { TextArea } = Input
 
 interface SettingsState {
-  settings: NotificationSettings | null
+  settings: NotificationSettingsType | null
   loading: boolean
   saving: boolean
   subscriptions: Array<{
@@ -62,7 +66,7 @@ interface SettingsState {
   }>
 }
 
-const NotificationSettings: React.FC = () => {
+const NotificationSettingsPage: React.FC = () => {
   const [form] = Form.useForm()
   const [testForm] = Form.useForm()
   const [state, setState] = useState<SettingsState>({
@@ -641,4 +645,4 @@ const NotificationSettings: React.FC = () => {
   )
 }
 
-export default NotificationSettings
+export default NotificationSettingsPage

@@ -1,0 +1,501 @@
+# DLMP Kubernetes部署配置
+# 包含后端应用、前端应用的部署配置
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dlmp-backend
+  namespace: dlmp-production
+  labels:
+    app: dlmp-backend
+    environment: production
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: dlmp-backend
+  template:
+    metadata:
+      labels:
+        app: dlmp-backend
+        environment: production
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+        co.elastic.logs/enabled: "true"
+        co.elastic.logs/json.keys_under_root: "true"
+        co.elastic.logs/json.add_error_key: "true"
+    spec:
+      serviceAccountName: dlmp-service-account
+      imagePullSecrets:
+        - name: docker-registry-secret
+      
+      # 初始化容器
+      initContainers:
+        # 等待数据库就绪
+        - name: wait-for-mysql
+          image: mysql:8.0
+          command: ['sh', '-c']
+          args:
+            - |
+              until mysql -h mysql-master -u root -p$MYSQL_ROOT_PASSWORD -e "SELECT 1"; do
+                echo "Waiting for MySQL to be ready..."
+                sleep 5
+              done
+              echo "MySQL is ready!"
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_ROOT_PASSWORD
+        
+        # 等待Redis就绪
+        - name: wait-for-redis
+          image: redis:7.0-alpine
+          command: ['sh', '-c']
+          args:
+            - |
+              until redis-cli -h redis-0.redis-headless -a $REDIS_PASSWORD ping; do
+                echo "Waiting for Redis to be ready..."
+                sleep 5
+              done
+              echo "Redis is ready!"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-redis-secret
+                  key: REDIS_PASSWORD
+      
+      containers:
+        - name: dlmp-backend
+          image: registry.example.com/dlmp/backend:1.0.0
+          imagePullPolicy: Always
+          
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 8081
+              protocol: TCP
+            - name: jmx
+              containerPort: 9999
+              protocol: TCP
+          
+          env:
+            # 数据库配置
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-database-secret
+                  key: DB_PASSWORD
+            
+            # Redis配置
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-redis-secret
+                  key: REDIS_PASSWORD
+            
+            # 应用配置
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-app-secret
+                  key: JWT_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dlmp-app-secret
+                  key: ENCRYPTION_KEY
+            
+            # 外部服务配置
+            - name: SMS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-secret
+                  key: SMS_ACCESS_KEY
+            - name: SMS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-secret
+                  key: SMS_SECRET_KEY
+            
+            # JVM配置
+            - name: JAVA_OPTS
+              value: "-Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Dspring.profiles.active=production"
+            
+            # Kubernetes环境变量
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+              readOnly: true
+            - name: logs-volume
+              mountPath: /app/logs
+            - name: data-volume
+              mountPath: /app/data
+            - name: temp-volume
+              mountPath: /tmp
+          
+          # 资源限制
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          
+          # 健康检查
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          # 启动探针
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          
+          # 生命周期钩子
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+          
+          # 安全上下文
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      
+      volumes:
+        - name: config-volume
+          configMap:
+            name: dlmp-backend-config
+        - name: logs-volume
+          emptyDir: {}
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: dlmp-backend-data
+        - name: temp-volume
+          emptyDir:
+            sizeLimit: 1Gi
+      
+      # Pod反亲和性 - 确保Pod分布在不同节点
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - dlmp-backend
+                topologyKey: kubernetes.io/hostname
+      
+      # 容忍度 - 允许调度到特定节点
+      tolerations:
+        - key: "node-role.kubernetes.io/worker"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      
+      # 节点选择器
+      nodeSelector:
+        node-type: "worker"
+      
+      # 优雅终止时间
+      terminationGracePeriodSeconds: 30
+      
+      # DNS配置
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
+          - name: edns0
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dlmp-frontend
+  namespace: dlmp-production
+  labels:
+    app: dlmp-frontend
+    environment: production
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: dlmp-frontend
+  template:
+    metadata:
+      labels:
+        app: dlmp-frontend
+        environment: production
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "false"
+        co.elastic.logs/enabled: "true"
+    spec:
+      imagePullSecrets:
+        - name: docker-registry-secret
+      
+      containers:
+        - name: dlmp-frontend
+          image: registry.example.com/dlmp/frontend:1.0.0
+          imagePullPolicy: Always
+          
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: API_BASE_URL
+              value: "http://dlmp-backend:8080/api"
+          
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: nginx-logs
+              mountPath: /var/log/nginx
+          
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101  # nginx user
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+      
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: dlmp-frontend-config
+        - name: nginx-logs
+          emptyDir: {}
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - dlmp-frontend
+                topologyKey: kubernetes.io/hostname
+      
+      terminationGracePeriodSeconds: 30
+
+---
+# HPA - 水平Pod自动扩缩容
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dlmp-backend-hpa
+  namespace: dlmp-production
+  labels:
+    app: dlmp-backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dlmp-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dlmp-frontend-hpa
+  namespace: dlmp-production
+  labels:
+    app: dlmp-frontend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dlmp-frontend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+
+---
+# VPA - 垂直Pod自动扩缩容 (可选)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: dlmp-backend-vpa
+  namespace: dlmp-production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dlmp-backend
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: dlmp-backend
+        minAllowed:
+          cpu: 100m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 4
+          memory: 8Gi
+        controlledResources: ["cpu", "memory"]

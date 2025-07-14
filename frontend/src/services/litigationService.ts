@@ -130,8 +130,30 @@ export const litigationService = {
   /**
    * 更新诉讼阶段
    */
-  updateLitigationStage: (id: number, stage: number): Promise<string> => {
-    return http.put(`/litigation/cases/${id}/stage`, { stage })
+  updateLitigationStage: (id: number, stage: number, progress?: number): Promise<string> => {
+    return http.put(`/litigation/cases/${id}/stage`, { stage, progress })
+  },
+
+  /**
+   * 获取可转诉讼的调解失败案件
+   */
+  getAvailableMediationCases: (params: { page: number, size: number, search?: string }): Promise<PaginationData<any>> => {
+    return http.get('/litigation/available-mediation-cases', { params })
+  },
+
+  // 文书管理
+  /**
+   * 获取诉讼文书模板
+   */
+  getDocumentTemplates: (): Promise<{ data: any[] }> => {
+    return http.get('/litigation/document-templates')
+  },
+
+  /**
+   * 生成诉讼文书
+   */
+  generateDocument: (caseId: number, params: any): Promise<{ data: any }> => {
+    return http.post(`/litigation/cases/${caseId}/documents`, params)
   },
 
   /**
@@ -147,6 +169,13 @@ export const litigationService = {
    */
   getCourtEvents: (caseId: number): Promise<{ data: CourtEvent[] }> => {
     return http.get(`/litigation/cases/${caseId}/events`)
+  },
+
+  /**
+   * 获取诉讼统计
+   */
+  getLitigationStats: (params?: LitigationStatsParams): Promise<{ data: any }> => {
+    return http.get('/litigation/stats', { params })
   },
 
   /**
@@ -226,19 +255,6 @@ export const litigationService = {
     return http.post(`/litigation/cases/${caseId}/documents`, params)
   },
 
-  /**
-   * 获取案件文书列表
-   */
-  getCaseDocuments: (caseId: number): Promise<{ data: Array<{
-    id: number
-    name: string
-    type: string
-    url: string
-    size: number
-    createTime: string
-  }> }> => {
-    return http.get(`/litigation/cases/${caseId}/documents`)
-  },
 
   /**
    * 下载文书
@@ -286,34 +302,6 @@ export const litigationService = {
     })
   },
 
-  // 诉讼统计分析
-  /**
-   * 获取诉讼统计信息
-   */
-  getLitigationStats: (params?: LitigationStatsParams): Promise<{
-    totalCases: number
-    activeTotal: number
-    completedCases: number
-    successRate: number
-    avgDuration: number
-    totalJudgmentAmount: number
-    totalRecoveredAmount: number
-    recoveryRate: number
-    stageDistribution: Array<{
-      stage: number
-      stageName: string
-      count: number
-      percentage: number
-    }>
-    courtDistribution: Array<{
-      courtName: string
-      caseCount: number
-      successRate: number
-      avgDuration: number
-    }>
-  }> => {
-    return http.get('/litigation/stats', { params })
-  },
 
   /**
    * 获取诉讼趋势数据

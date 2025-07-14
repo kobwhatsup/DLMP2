@@ -19,26 +19,93 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 5173,
+    host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_API_BASE_URL || 'http://localhost:8080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-    },
+        secure: false,
+        ws: true,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err)
+          })
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to the Target:', req.method, req.url)
+          })
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url)
+          })
+        }
+      }
+    }
   },
   build: {
     target: 'es2015',
     outDir: 'dist',
-    sourcemap: false,
+    assetsDir: 'assets',
+    sourcemap: process.env.NODE_ENV === 'development',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: process.env.NODE_ENV === 'production',
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      }
+    },
     rollupOptions: {
       output: {
-        chunkFileNames: 'js/[name]-[hash].js',
-        entryFileNames: 'js/[name]-[hash].js',
-        assetFileNames: '[ext]/[name]-[hash].[ext]',
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        manualChunks: (id) => {
+          // 第三方库分包策略
+          if (id.includes('node_modules')) {
+            // React核心包
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor'
+            }
+            // Ant Design
+            if (id.includes('antd') || id.includes('@ant-design')) {
+              return 'antd-vendor'
+            }
+            // 图表库
+            if (id.includes('echarts') || id.includes('chart')) {
+              return 'chart-vendor'
+            }
+            // 工具库
+            if (id.includes('lodash') || id.includes('dayjs') || id.includes('axios')) {
+              return 'utils-vendor'
+            }
+            // 其他第三方库
+            return 'vendor'
+          }
+          // 业务代码分包
+          if (id.includes('/src/pages/')) {
+            const dirs = id.split('/src/pages/')[1].split('/')
+            return `page-${dirs[0]}`
+          }
+          if (id.includes('/src/components/')) {
+            return 'components'
+          }
+          if (id.includes('/src/utils/') || id.includes('/src/hooks/')) {
+            return 'shared'
+          }
+        }
       },
+      external: (id) => {
+        // CDN外部化的包
+        if (process.env.VITE_USE_CDN === 'true') {
+          return ['react', 'react-dom', 'antd'].includes(id)
+        }
+        return false
+      }
     },
+    // 构建优化
+    chunkSizeWarningLimit: 1000,
+    assetsInlineLimit: 4096,
+    reportCompressedSize: false
   },
   css: {
     preprocessorOptions: {
@@ -47,4 +114,7 @@ export default defineConfig({
       },
     },
   },
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV === 'development')
+  }
 })

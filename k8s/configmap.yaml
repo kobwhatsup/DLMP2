@@ -1,0 +1,515 @@
+# DLMP ConfigMap配置
+# 应用配置、数据库连接、Redis配置等
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlmp-backend-config
+  namespace: dlmp-production
+  labels:
+    app: dlmp-backend
+    environment: production
+data:
+  # 应用配置
+  application.yml: |
+    spring:
+      profiles:
+        active: production
+      
+      # 数据源配置
+      datasource:
+        type: com.alibaba.druid.pool.DruidDataSource
+        druid:
+          # 主数据源
+          master:
+            url: jdbc:mysql://mysql-master:3306/dlmp?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&serverTimezone=Asia/Shanghai
+            username: ${DB_USERNAME}
+            password: ${DB_PASSWORD}
+            driver-class-name: com.mysql.cj.jdbc.Driver
+            initial-size: 10
+            min-idle: 10
+            max-active: 100
+            max-wait: 60000
+            time-between-eviction-runs-millis: 60000
+            min-evictable-idle-time-millis: 300000
+            validation-query: SELECT 1
+            test-while-idle: true
+            test-on-borrow: false
+            test-on-return: false
+            pool-prepared-statements: true
+            max-pool-prepared-statement-per-connection-size: 50
+          
+          # 从数据源
+          slave:
+            url: jdbc:mysql://mysql-slave:3306/dlmp?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&serverTimezone=Asia/Shanghai
+            username: ${DB_USERNAME}
+            password: ${DB_PASSWORD}
+            driver-class-name: com.mysql.cj.jdbc.Driver
+            initial-size: 15
+            min-idle: 15
+            max-active: 150
+            max-wait: 60000
+      
+      # Redis集群配置
+      redis:
+        cluster:
+          nodes:
+            - redis-0.redis-headless:6379
+            - redis-1.redis-headless:6379
+            - redis-2.redis-headless:6379
+            - redis-3.redis-headless:6379
+            - redis-4.redis-headless:6379
+            - redis-5.redis-headless:6379
+          max-redirects: 3
+        password: ${REDIS_PASSWORD}
+        timeout: 5000ms
+        lettuce:
+          pool:
+            max-active: 200
+            max-idle: 20
+            min-idle: 10
+            max-wait: 1000ms
+      
+      # JPA配置
+      jpa:
+        hibernate:
+          ddl-auto: none
+        show-sql: false
+        open-in-view: false
+        properties:
+          hibernate:
+            dialect: org.hibernate.dialect.MySQL8Dialect
+            jdbc:
+              batch_size: 50
+              fetch_size: 100
+            cache:
+              use_second_level_cache: true
+              use_query_cache: true
+      
+      # 线程池配置
+      task:
+        execution:
+          pool:
+            core-size: 20
+            max-size: 100
+            queue-capacity: 1000
+            keep-alive: 60s
+        scheduling:
+          pool:
+            size: 10
+    
+    # 服务器配置
+    server:
+      port: 8080
+      servlet:
+        context-path: /
+      tomcat:
+        threads:
+          max: 500
+          min-spare: 100
+        max-connections: 10000
+        accept-count: 200
+    
+    # 管理端点配置
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus
+      endpoint:
+        health:
+          show-details: when-authorized
+          probes:
+            enabled: true
+      metrics:
+        export:
+          prometheus:
+            enabled: true
+    
+    # 日志配置
+    logging:
+      level:
+        com.dlmp: INFO
+        org.springframework.security: WARN
+        org.hibernate.SQL: WARN
+      pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%logger{50}] - %msg%n"
+      file:
+        name: /app/logs/application.log
+        max-size: 100MB
+        max-history: 30
+    
+    # 业务配置
+    app:
+      file:
+        upload-path: /app/data/uploads
+        max-size: 104857600
+      security:
+        jwt:
+          secret: ${JWT_SECRET}
+          expiration: 7200
+      business:
+        case:
+          auto-assignment: true
+        mediation:
+          timeout-days: 30
+        litigation:
+          timeout-days: 90
+
+  # JVM配置
+  jvm-options: |
+    -server
+    -Djava.awt.headless=true
+    -Dfile.encoding=UTF-8
+    -Duser.timezone=Asia/Shanghai
+    -Djava.net.preferIPv4Stack=true
+    -XX:+UseG1GC
+    -XX:MaxGCPauseMillis=200
+    -XX:G1HeapRegionSize=16m
+    -XX:+UseStringDeduplication
+    -XX:+OptimizeStringConcat
+    -XX:+UseCompressedOops
+    -XX:+UseCompressedClassPointers
+    -XX:+TieredCompilation
+    -XX:+UseFastAccessorMethods
+    -Xloggc:/app/logs/gc.log
+    -XX:+PrintGC
+    -XX:+PrintGCDetails
+    -XX:+PrintGCTimeStamps
+    -XX:+UseGCLogFileRotation
+    -XX:NumberOfGCLogFiles=10
+    -XX:GCLogFileSize=100M
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dlmp-frontend-config
+  namespace: dlmp-production
+  labels:
+    app: dlmp-frontend
+    environment: production
+data:
+  # Nginx配置
+  nginx.conf: |
+    user nginx;
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+    
+    events {
+      worker_connections 1024;
+      use epoll;
+      multi_accept on;
+    }
+    
+    http {
+      include /etc/nginx/mime.types;
+      default_type application/octet-stream;
+      
+      log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+      
+      access_log /var/log/nginx/access.log main;
+      
+      sendfile on;
+      tcp_nopush on;
+      tcp_nodelay on;
+      keepalive_timeout 65;
+      types_hash_max_size 2048;
+      server_tokens off;
+      
+      gzip on;
+      gzip_vary on;
+      gzip_min_length 1024;
+      gzip_comp_level 6;
+      gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+      
+      server {
+        listen 80;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html index.htm;
+        
+        # 前端路由支持
+        location / {
+          try_files $uri $uri/ /index.html;
+        }
+        
+        # 静态资源缓存
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+          expires 1y;
+          add_header Cache-Control "public, immutable";
+        }
+        
+        # 健康检查
+        location /health {
+          access_log off;
+          return 200 "healthy\n";
+          add_header Content-Type text/plain;
+        }
+        
+        # API代理（如果需要）
+        location /api/ {
+          proxy_pass http://dlmp-backend:8080;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
+        
+        location = /50x.html {
+          root /usr/share/nginx/html;
+        }
+      }
+    }
+
+  # 环境变量配置
+  env.js: |
+    window.__ENV__ = {
+      NODE_ENV: 'production',
+      API_BASE_URL: '/api',
+      WS_BASE_URL: 'wss://dlmp.example.com/ws',
+      APP_VERSION: '1.0.0',
+      LOG_LEVEL: 'info'
+    };
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+  namespace: dlmp-production
+  labels:
+    app: mysql
+    environment: production
+data:
+  my.cnf: |
+    [mysqld]
+    # 基础配置
+    user = mysql
+    port = 3306
+    bind-address = 0.0.0.0
+    
+    # 数据目录
+    datadir = /var/lib/mysql
+    socket = /var/run/mysqld/mysqld.sock
+    pid-file = /var/run/mysqld/mysqld.pid
+    
+    # 字符集设置
+    character-set-server = utf8mb4
+    collation-server = utf8mb4_unicode_ci
+    init_connect = 'SET NAMES utf8mb4'
+    
+    # 性能优化
+    max_connections = 1000
+    max_connect_errors = 100000
+    table_open_cache = 2000
+    table_definition_cache = 2000
+    thread_cache_size = 100
+    query_cache_type = 1
+    query_cache_size = 128M
+    query_cache_limit = 2M
+    
+    # InnoDB配置
+    default_storage_engine = InnoDB
+    innodb_buffer_pool_size = 1G
+    innodb_log_file_size = 256M
+    innodb_log_buffer_size = 16M
+    innodb_flush_log_at_trx_commit = 2
+    innodb_lock_wait_timeout = 50
+    innodb_file_per_table = 1
+    
+    # 慢查询日志
+    slow_query_log = 1
+    slow_query_log_file = /var/log/mysql/slow.log
+    long_query_time = 2
+    log_queries_not_using_indexes = 1
+    
+    # 错误日志
+    log_error = /var/log/mysql/error.log
+    
+    # 二进制日志
+    log_bin = /var/log/mysql/mysql-bin.log
+    expire_logs_days = 10
+    max_binlog_size = 100M
+    
+    # 复制配置
+    server-id = 1
+    gtid_mode = ON
+    enforce_gtid_consistency = ON
+    
+    # 安全配置
+    skip_name_resolve = 1
+    sql_mode = STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: dlmp-production
+  labels:
+    app: redis
+    environment: production
+data:
+  redis.conf: |
+    # 网络配置
+    bind 0.0.0.0
+    port 6379
+    timeout 300
+    tcp-keepalive 300
+    
+    # 认证
+    requirepass ${REDIS_PASSWORD}
+    masterauth ${REDIS_PASSWORD}
+    
+    # 内存管理
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+    
+    # 持久化
+    save 900 1
+    save 300 10
+    save 60 10000
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+    
+    # AOF
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    # 日志
+    loglevel notice
+    logfile /var/log/redis/redis.log
+    
+    # 集群配置
+    cluster-enabled yes
+    cluster-config-file nodes.conf
+    cluster-node-timeout 15000
+    cluster-announce-port 6379
+    cluster-announce-bus-port 16379
+    cluster-require-full-coverage no
+    
+    # 性能优化
+    lazyfree-lazy-eviction yes
+    lazyfree-lazy-expire yes
+    lazyfree-lazy-server-del yes
+    
+    # 客户端
+    maxclients 10000
+    
+    # 慢查询
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: dlmp-monitoring
+  labels:
+    app: prometheus
+    environment: production
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+    
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager:9093
+    
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      - job_name: 'dlmp-backend'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - dlmp-production
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: dlmp-backend
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: metrics
+      
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - dlmp-production
+                - dlmp-monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: dlmp-monitoring
+  labels:
+    app: filebeat
+    environment: production
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+    - type: container
+      paths:
+        - /var/log/containers/*dlmp*.log
+      processors:
+        - add_kubernetes_metadata:
+            host: ${NODE_NAME}
+            matchers:
+            - logs_path:
+                logs_path: "/var/log/containers/"
+    
+    output.elasticsearch:
+      hosts: ['elasticsearch:9200']
+      index: "dlmp-%{+yyyy.MM.dd}"
+    
+    setup.template.name: "dlmp"
+    setup.template.pattern: "dlmp-*"
+    setup.template.enabled: true
+    
+    logging.level: info

@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # 前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: dlmp-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-http://localhost:8080}
+      - WS_URL=${WS_URL:-ws://localhost:8080}
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/default.conf:/etc/nginx/conf.d/default.conf.template:ro
+    depends_on:
+      - backend
+    networks:
+      - dlmp-network
+    restart: unless-stopped
+    labels:
+      - "com.dlmp.service=frontend"
+      - "com.dlmp.version=1.0.0"
+
+  # 后端服务（开发用）
+  backend:
+    image: openjdk:17-jdk-alpine
+    container_name: dlmp-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    volumes:
+      - ../backend:/app
+    working_dir: /app
+    command: ["./gradlew", "bootRun"]
+    networks:
+      - dlmp-network
+    restart: unless-stopped
+    labels:
+      - "com.dlmp.service=backend"
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: dlmp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./docker/redis.conf:/etc/redis/redis.conf:ro
+    command: redis-server /etc/redis/redis.conf
+    networks:
+      - dlmp-network
+    restart: unless-stopped
+    labels:
+      - "com.dlmp.service=redis"
+
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: dlmp-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=dlmp123456
+      - MYSQL_DATABASE=dlmp
+      - MYSQL_USER=dlmp
+      - MYSQL_PASSWORD=dlmp123456
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql.cnf:/etc/mysql/conf.d/mysql.cnf:ro
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - dlmp-network
+    restart: unless-stopped
+    labels:
+      - "com.dlmp.service=mysql"
+
+  # Nginx负载均衡器
+  nginx:
+    image: nginx:alpine
+    container_name: dlmp-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx-lb.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+    networks:
+      - dlmp-network
+    restart: unless-stopped
+    labels:
+      - "com.dlmp.service=nginx-lb"
+
+networks:
+  dlmp-network:
+    driver: bridge
+    labels:
+      - "com.dlmp.network=main"
+
+volumes:
+  mysql-data:
+    driver: local
+    labels:
+      - "com.dlmp.volume=mysql"
+  redis-data:
+    driver: local
+    labels:
+      - "com.dlmp.volume=redis"

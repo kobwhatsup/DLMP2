@@ -1,0 +1,407 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      force_deploy:
+        description: 'Force deployment even if tests fail'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  NODE_VERSION: '18'
+  JAVA_VERSION: '17'
+
+jobs:
+  # 环境检查
+  pre-deployment-check:
+    name: Pre-deployment Check
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+    steps:
+      - name: Determine environment
+        id: set-env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check deployment conditions
+        id: check
+        run: |
+          should_deploy="false"
+          
+          if [[ "${{ github.event.inputs.force_deploy }}" == "true" ]]; then
+            should_deploy="true"
+            echo "🚀 Force deployment enabled"
+          elif [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == refs/tags/v*) ]]; then
+            should_deploy="true"
+            echo "🚀 Automatic deployment for ${{ github.ref }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            should_deploy="true"
+            echo "🚀 Manual deployment triggered"
+          fi
+          
+          echo "should_deploy=$should_deploy" >> $GITHUB_OUTPUT
+          echo "Deployment environment: ${{ steps.set-env.outputs.environment }}"
+
+  # 健康检查和冒烟测试
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: pre-deployment-check
+    if: needs.pre-deployment-check.outputs.should_deploy == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build applications
+        run: |
+          cd frontend && npm run build
+          cd ../backend && chmod +x gradlew && ./gradlew build -x test
+
+      - name: Start test environment
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 45
+
+      - name: Wait for services
+        run: |
+          npx wait-on http://localhost:3000 --timeout 120000
+          npx wait-on http://localhost:8080/actuator/health --timeout 120000
+
+      - name: Run smoke tests
+        working-directory: ./frontend
+        run: |
+          # 基础健康检查
+          curl -f http://localhost:3000/health || exit 1
+          curl -f http://localhost:8080/actuator/health || exit 1
+          
+          # 关键API测试
+          npx playwright test src/e2e/auth.spec.ts --grep "should login successfully"
+          npx playwright test src/e2e/navigation.spec.ts --grep "should navigate to all main pages"
+
+      - name: Cleanup test environment
+        if: always()
+        run: docker-compose -f docker-compose.test.yml down
+
+  # 数据库迁移
+  database-migration:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-check, smoke-tests]
+    if: needs.pre-deployment-check.outputs.should_deploy == 'true'
+    environment: ${{ needs.pre-deployment-check.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Database backup (Production only)
+        if: needs.pre-deployment-check.outputs.environment == 'production'
+        run: |
+          echo "Creating database backup..."
+          # 生产环境数据库备份逻辑
+          mysqldump -h ${{ secrets.DB_HOST }} -u ${{ secrets.DB_USER }} -p${{ secrets.DB_PASSWORD }} ${{ secrets.DB_NAME }} > backup_$(date +%Y%m%d_%H%M%S).sql
+          
+          # 上传备份到云存储
+          aws s3 cp backup_*.sql s3://${{ secrets.BACKUP_BUCKET }}/database/
+
+      - name: Run database migrations
+        working-directory: ./backend
+        env:
+          SPRING_PROFILES_ACTIVE: ${{ needs.pre-deployment-check.outputs.environment }}
+          SPRING_DATASOURCE_URL: ${{ secrets.DB_URL }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.DB_USER }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew flywayMigrate
+
+      - name: Verify migration
+        working-directory: ./backend
+        env:
+          SPRING_PROFILES_ACTIVE: ${{ needs.pre-deployment-check.outputs.environment }}
+          SPRING_DATASOURCE_URL: ${{ secrets.DB_URL }}
+          SPRING_DATASOURCE_USERNAME: ${{ secrets.DB_USER }}
+          SPRING_DATASOURCE_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: ./gradlew flywayInfo
+
+  # 部署到Kubernetes
+  deploy-k8s:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-check, smoke-tests, database-migration]
+    if: needs.pre-deployment-check.outputs.should_deploy == 'true'
+    environment: ${{ needs.pre-deployment-check.outputs.environment }}
+    strategy:
+      matrix:
+        component: [frontend, backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+
+      - name: Get image tag
+        id: image-tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy ${{ matrix.component }}
+        run: |
+          helm upgrade --install dlmp-${{ matrix.component }} ./k8s/helm/dlmp-${{ matrix.component }} \
+            --namespace dlmp-${{ needs.pre-deployment-check.outputs.environment }} \
+            --create-namespace \
+            --set image.tag=${{ steps.image-tag.outputs.tag }} \
+            --set environment=${{ needs.pre-deployment-check.outputs.environment }} \
+            --set replicaCount=${{ needs.pre-deployment-check.outputs.environment == 'production' && '3' || '1' }} \
+            --values ./k8s/helm/dlmp-${{ matrix.component }}/values-${{ needs.pre-deployment-check.outputs.environment }}.yaml \
+            --wait \
+            --timeout=600s
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/dlmp-${{ matrix.component }} \
+            -n dlmp-${{ needs.pre-deployment-check.outputs.environment }} \
+            --timeout=300s
+
+  # 部署后测试
+  post-deployment-tests:
+    name: Post-deployment Tests
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-check, deploy-k8s]
+    if: needs.pre-deployment-check.outputs.should_deploy == 'true'
+    environment: ${{ needs.pre-deployment-check.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Wait for deployment to be ready
+        run: |
+          echo "Waiting for services to be ready..."
+          sleep 60
+
+      - name: Get service URLs
+        id: urls
+        run: |
+          if [[ "${{ needs.pre-deployment-check.outputs.environment }}" == "production" ]]; then
+            echo "frontend_url=https://dlmp.com" >> $GITHUB_OUTPUT
+            echo "backend_url=https://api.dlmp.com" >> $GITHUB_OUTPUT
+          else
+            echo "frontend_url=https://staging.dlmp.com" >> $GITHUB_OUTPUT
+            echo "backend_url=https://staging-api.dlmp.com" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Health checks
+        run: |
+          curl -f ${{ steps.urls.outputs.frontend_url }}/health
+          curl -f ${{ steps.urls.outputs.backend_url }}/actuator/health
+
+      - name: API integration tests
+        run: |
+          # 运行关键API集成测试
+          curl -f ${{ steps.urls.outputs.backend_url }}/api/users
+          curl -f ${{ steps.urls.outputs.backend_url }}/api/cases
+
+      - name: Run critical E2E tests
+        working-directory: ./frontend
+        env:
+          BASE_URL: ${{ steps.urls.outputs.frontend_url }}
+        run: |
+          npx playwright test src/e2e/auth.spec.ts
+          npx playwright test src/e2e/navigation.spec.ts
+
+      - name: Performance validation
+        working-directory: ./frontend
+        env:
+          TEST_URL: ${{ steps.urls.outputs.frontend_url }}
+        run: |
+          # 运行性能验证
+          node src/tests/performance/lighthouse.js ./test-results/post-deploy-performance
+          
+          # 检查性能分数
+          SCORE=$(node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('./test-results/post-deploy-performance/performance-summary.json'));
+            const avgScore = data.filter(r => !r.error).reduce((sum, r) => sum + r.score, 0) / data.filter(r => !r.error).length;
+            console.log(avgScore);
+          ")
+          
+          if (( $(echo "$SCORE < 70" | bc -l) )); then
+            echo "❌ Performance score ($SCORE) below threshold (70)"
+            exit 1
+          else
+            echo "✅ Performance score ($SCORE) meets requirements"
+          fi
+
+  # 回滚计划
+  rollback:
+    name: Rollback
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-check, deploy-k8s, post-deployment-tests]
+    if: failure() && needs.pre-deployment-check.outputs.should_deploy == 'true'
+    environment: ${{ needs.pre-deployment-check.outputs.environment }}
+    strategy:
+      matrix:
+        component: [frontend, backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+
+      - name: Rollback ${{ matrix.component }}
+        run: |
+          helm rollback dlmp-${{ matrix.component }} \
+            --namespace dlmp-${{ needs.pre-deployment-check.outputs.environment }}
+
+      - name: Verify rollback
+        run: |
+          kubectl rollout status deployment/dlmp-${{ matrix.component }} \
+            -n dlmp-${{ needs.pre-deployment-check.outputs.environment }} \
+            --timeout=300s
+
+  # 部署通知和清理
+  post-deployment:
+    name: Post-deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-check, deploy-k8s, post-deployment-tests]
+    if: always() && needs.pre-deployment-check.outputs.should_deploy == 'true'
+    steps:
+      - name: Update deployment status
+        run: |
+          if [[ "${{ needs.post-deployment-tests.result }}" == "success" ]]; then
+            echo "✅ Deployment successful"
+            echo "DEPLOYMENT_STATUS=success" >> $GITHUB_ENV
+          else
+            echo "❌ Deployment failed"
+            echo "DEPLOYMENT_STATUS=failure" >> $GITHUB_ENV
+          fi
+
+      - name: Notify Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ env.DEPLOYMENT_STATUS }}
+          channel: '#deployments'
+          message: |
+            ${{ env.DEPLOYMENT_STATUS == 'success' && '✅' || '❌' }} Deployment to ${{ needs.pre-deployment-check.outputs.environment }}
+            
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Environment: ${{ needs.pre-deployment-check.outputs.environment }}
+            
+            ${{ env.DEPLOYMENT_STATUS == 'success' && 'All services are running normally' || 'Deployment failed - check logs for details' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Create GitHub release (Production only)
+        if: needs.pre-deployment-check.outputs.environment == 'production' && env.DEPLOYMENT_STATUS == 'success' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            ## 🚀 Production Deployment
+            
+            This release has been successfully deployed to production.
+            
+            ### Changes
+            - Auto-generated from tag ${{ github.ref }}
+            
+            ### Deployment Details
+            - Environment: Production
+            - Deployment Time: ${{ github.event.head_commit.timestamp }}
+            - Commit SHA: ${{ github.sha }}
+          draft: false
+          prerelease: false
+
+      - name: Update monitoring dashboards
+        if: env.DEPLOYMENT_STATUS == 'success'
+        run: |
+          # 更新Grafana仪表板注释
+          curl -X POST "${{ secrets.GRAFANA_URL }}/api/annotations" \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "Deployment to ${{ needs.pre-deployment-check.outputs.environment }}",
+              "tags": ["deployment", "${{ needs.pre-deployment-check.outputs.environment }}"],
+              "time": '$(date +%s000)'
+            }'
+
+      - name: Clean up old images
+        run: |
+          # 清理旧的Docker镜像（保留最近10个版本）
+          echo "Cleaning up old container images..."
+          # 这里可以添加清理逻辑

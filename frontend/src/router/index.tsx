@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react'
 import { Spin } from 'antd'
 
 import Layout from '@/components/Layout'
+import { ErrorBoundary } from '@/components'
 import Login from '@/pages/Login'
 import NotFound from '@/pages/NotFound'
 
@@ -43,15 +44,17 @@ const SystemSettings = lazy(() => import('@/pages/System/SystemSettings'))
 
 // 加载中组件
 const PageSuspense: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Suspense
-    fallback={
-      <div className='flex-center' style={{ height: '200px' }}>
-        <Spin size='large' />
-      </div>
-    }
-  >
-    {children}
-  </Suspense>
+  <ErrorBoundary>
+    <Suspense
+      fallback={
+        <div className='flex-center' style={{ height: '200px' }}>
+          <Spin size='large' />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  </ErrorBoundary>
 )
 
 // 路由配置

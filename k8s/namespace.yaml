@@ -1,0 +1,236 @@
+# DLMP Kubernetes命名空间配置
+# 为DLMP系统创建独立的命名空间以便管理和隔离
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dlmp-production
+  labels:
+    name: dlmp-production
+    environment: production
+    project: dlmp
+    managed-by: kubernetes
+  annotations:
+    description: "DLMP个贷不良资产分散诉讼调解平台生产环境"
+    contact: "admin@dlmp.example.com"
+    version: "1.0.0"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dlmp-staging
+  labels:
+    name: dlmp-staging
+    environment: staging
+    project: dlmp
+    managed-by: kubernetes
+  annotations:
+    description: "DLMP个贷不良资产分散诉讼调解平台测试环境"
+    contact: "dev@dlmp.example.com"
+    version: "1.0.0"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dlmp-monitoring
+  labels:
+    name: dlmp-monitoring
+    environment: production
+    project: dlmp-monitoring
+    managed-by: kubernetes
+  annotations:
+    description: "DLMP监控和日志系统"
+    contact: "ops@dlmp.example.com"
+    version: "1.0.0"
+
+---
+# 资源配额 - 生产环境
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dlmp-production-quota
+  namespace: dlmp-production
+spec:
+  hard:
+    # 计算资源限制
+    requests.cpu: "8"      # 总CPU请求
+    requests.memory: 16Gi   # 总内存请求
+    limits.cpu: "16"       # 总CPU限制
+    limits.memory: 32Gi     # 总内存限制
+    
+    # 存储资源限制
+    requests.storage: 100Gi # 总存储请求
+    persistentvolumeclaims: "10" # PVC数量限制
+    
+    # 对象数量限制
+    pods: "50"             # Pod数量限制
+    services: "20"         # Service数量限制
+    secrets: "30"          # Secret数量限制
+    configmaps: "30"       # ConfigMap数量限制
+    
+    # 网络策略
+    services.nodeports: "5"    # NodePort Service数量限制
+    services.loadbalancers: "3" # LoadBalancer Service数量限制
+
+---
+# 资源配额 - 测试环境
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dlmp-staging-quota
+  namespace: dlmp-staging
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    requests.storage: 50Gi
+    persistentvolumeclaims: "5"
+    pods: "20"
+    services: "10"
+    secrets: "15"
+    configmaps: "15"
+    services.nodeports: "2"
+    services.loadbalancers: "1"
+
+---
+# 网络策略 - 默认拒绝所有入口流量
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: dlmp-production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+---
+# 网络策略 - 允许内部通信
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-internal-communication
+  namespace: dlmp-production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: dlmp-production
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: dlmp-production
+  - to: {}  # 允许外部出口流量
+    ports:
+    - protocol: TCP
+      port: 53   # DNS
+    - protocol: UDP
+      port: 53   # DNS
+    - protocol: TCP
+      port: 443  # HTTPS
+    - protocol: TCP
+      port: 80   # HTTP
+
+---
+# 网络策略 - 允许监控访问
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-access
+  namespace: dlmp-production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: dlmp-monitoring
+    ports:
+    - protocol: TCP
+      port: 8080  # 应用监控端口
+    - protocol: TCP
+      port: 9090  # Prometheus指标端口
+    - protocol: TCP
+      port: 9100  # Node Exporter
+    - protocol: TCP
+      port: 8081  # 管理端口
+
+---
+# Pod安全策略
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: dlmp-psp
+  namespace: dlmp-production
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+
+---
+# 服务账户
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dlmp-service-account
+  namespace: dlmp-production
+  labels:
+    app: dlmp
+    environment: production
+
+---
+# 角色定义
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dlmp-role
+  namespace: dlmp-production
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+
+---
+# 角色绑定
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dlmp-role-binding
+  namespace: dlmp-production
+subjects:
+- kind: ServiceAccount
+  name: dlmp-service-account
+  namespace: dlmp-production
+roleRef:
+  kind: Role
+  name: dlmp-role
+  apiGroup: rbac.authorization.k8s.io

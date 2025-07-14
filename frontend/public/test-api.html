@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API连接测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { margin: 10px 0; padding: 10px; border-left: 4px solid #ddd; }
+        .success { border-color: green; background: #f0fff0; }
+        .error { border-color: red; background: #fff0f0; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>DLMP API 连接测试</h1>
+    
+    <button onclick="testConnection()">测试API连接</button>
+    <button onclick="testCaseAPI()">测试案件API</button>
+    <button onclick="testWithCredentials()">测试带凭证请求</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        
+        function addResult(message, isSuccess = true) {
+            const div = document.createElement('div');
+            div.className = `result ${isSuccess ? 'success' : 'error'}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            document.getElementById('results').appendChild(div);
+        }
+
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/api/health`);
+                const data = await response.json();
+                addResult(`✅ 健康检查成功: ${JSON.stringify(data)}`);
+            } catch (error) {
+                addResult(`❌ 健康检查失败: ${error.message}`, false);
+            }
+        }
+
+        async function testCaseAPI() {
+            try {
+                const response = await fetch(`${API_BASE}/case/cases?page=1&size=5`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (data.code === 200) {
+                    addResult(`✅ 案件API成功: 获取到 ${data.data.total} 条案件数据`);
+                    addResult(`📊 案件数据: ${JSON.stringify(data.data.records.slice(0, 2), null, 2)}`);
+                } else {
+                    addResult(`⚠️ 案件API返回错误: ${data.message}`, false);
+                }
+            } catch (error) {
+                addResult(`❌ 案件API失败: ${error.message}`, false);
+                console.error('详细错误:', error);
+            }
+        }
+
+        async function testWithCredentials() {
+            try {
+                const response = await fetch(`${API_BASE}/case/cases?page=1&size=3`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Request-ID': 'test-' + Date.now()
+                    },
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.code === 200) {
+                    addResult(`✅ 带凭证请求成功: ${data.message}`);
+                } else {
+                    addResult(`⚠️ 带凭证请求错误: ${data.message}`, false);
+                }
+            } catch (error) {
+                addResult(`❌ 带凭证请求失败: ${error.message}`, false);
+            }
+        }
+
+        // 自动运行基础测试
+        window.onload = function() {
+            setTimeout(testConnection, 100);
+            setTimeout(testCaseAPI, 1000);
+        };
+    </script>
+</body>
+</html>

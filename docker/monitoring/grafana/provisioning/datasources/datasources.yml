@@ -1,0 +1,176 @@
+# Grafana数据源配置
+# 自动配置Prometheus、Loki、Jaeger等数据源
+
+apiVersion: 1
+
+# 数据源列表
+datasources:
+  # Prometheus 主要数据源
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    uid: prometheus
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.45.0
+      cacheLevel: 'High'
+      disableMetricsLookup: false
+      customQueryParameters: ""
+      timeInterval: "30s"
+      queryTimeout: "60s"
+    secureJsonData: {}
+
+  # Loki 日志数据源
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    uid: loki
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: jaeger
+          matcherRegex: "traceID=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+
+  # Jaeger 链路追踪数据源
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    uid: jaeger
+    editable: true
+    jsonData:
+      tracesToLogs:
+        datasourceUid: 'loki'
+        tags: ['job', 'instance', 'pod', 'namespace']
+        mappedTags:
+          - key: service.name
+            value: service
+        mapTagNamesEnabled: false
+        spanStartTimeShift: '1h'
+        spanEndTimeShift: '1h'
+        filterByTraceID: false
+        filterBySpanID: false
+
+  # Elasticsearch 日志数据源
+  - name: Elasticsearch
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    uid: elasticsearch
+    database: "[logstash-]YYYY.MM.DD"
+    editable: true
+    jsonData:
+      index: "logstash-*"
+      timeField: "@timestamp"
+      esVersion: "8.8.0"
+      logMessageField: "message"
+      logLevelField: "level"
+      maxConcurrentShardRequests: 5
+      includeFrozen: false
+
+  # MySQL 数据源 (用于业务数据查询)
+  - name: MySQL-Business
+    type: mysql
+    access: proxy
+    url: mysql-master:3306
+    uid: mysql-business
+    database: dlmp
+    user: grafana_user
+    editable: true
+    jsonData:
+      connMaxLifetime: 14400
+      maxIdleConns: 100
+      maxOpenConns: 100
+    secureJsonData:
+      password: grafana_password
+
+  # Redis 数据源 (用于缓存监控)
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis-node-1:6379
+    uid: redis
+    editable: true
+    jsonData:
+      client: "standalone"
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
+    secureJsonData:
+      password: redis123456
+
+  # InfluxDB 时序数据源 (如果使用)
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    uid: influxdb
+    database: dlmp
+    user: grafana
+    editable: true
+    jsonData:
+      version: Flux
+      organization: dlmp
+      defaultBucket: monitoring
+      tlsSkipVerify: true
+    secureJsonData:
+      token: your-influxdb-token
+
+  # CloudWatch 数据源 (如果部署在AWS)
+  - name: CloudWatch
+    type: cloudwatch
+    access: proxy
+    uid: cloudwatch
+    editable: true
+    jsonData:
+      authType: default
+      defaultRegion: ap-southeast-1
+      customMetricsNamespaces: "AWS/ApplicationELB,AWS/ELB,AWS/RDS,AWS/ElastiCache"
+      assumeRoleArn: ""
+    secureJsonData:
+      accessKey: ""
+      secretKey: ""
+
+  # Zabbix 数据源 (如果集成Zabbix)
+  - name: Zabbix
+    type: alexanderzobnin-zabbix-datasource
+    access: proxy
+    url: http://zabbix-server/api_jsonrpc.php
+    uid: zabbix
+    editable: true
+    jsonData:
+      username: grafana
+      trends: true
+      trendsFrom: "7d"
+      trendsRange: "4d"
+      cacheTTL: "1h"
+      timeout: 30
+    secureJsonData:
+      password: zabbix-password
+
+  # Pingdom 数据源 (外部监控)
+  - name: Pingdom
+    type: grafana-pingdom-datasource
+    access: proxy
+    uid: pingdom
+    editable: true
+    jsonData: {}
+    secureJsonData:
+      apiToken: your-pingdom-token
+
+  # TestData 数据源 (用于测试和演示)
+  - name: TestData
+    type: testdata
+    access: proxy
+    uid: testdata
+    editable: true

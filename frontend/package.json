@@ -13,7 +13,19 @@
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:performance": "node src/tests/performance/lighthouse.js",
+    "test:load": "node src/tests/performance/loadtest.js frontend light",
+    "test:load:medium": "node src/tests/performance/loadtest.js frontend medium",
+    "test:load:heavy": "node src/tests/performance/loadtest.js frontend heavy",
+    "test:load:api": "node src/tests/performance/loadtest.js api api_basic",
+    "test:load:api-stress": "node src/tests/performance/loadtest.js api api_stress",
+    "analyze:bundle": "node src/tests/performance/bundle-analyzer.js",
+    "test:all": "npm run test && npm run test:e2e && npm run test:performance"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -47,7 +59,13 @@
     "@testing-library/react": "^14.1.2",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/user-event": "^14.5.1",
-    "jsdom": "^23.0.1"
+    "jsdom": "^23.0.1",
+    "@playwright/test": "^1.40.0",
+    "@vitest/coverage-v8": "^1.0.4",
+    "lighthouse": "^11.4.0",
+    "chrome-launcher": "^1.1.0",
+    "autocannon": "^7.14.0",
+    "webpack-bundle-analyzer": "^4.10.1"
   },
   "engines": {
     "node": ">=18.0.0",

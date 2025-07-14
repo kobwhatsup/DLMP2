@@ -1,0 +1,207 @@
+# Prometheus配置文件
+# DLMP系统监控配置
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'dlmp-production'
+    replica: '1'
+
+# 告警规则文件
+rule_files:
+  - "rules/*.yml"
+
+# 告警管理器配置
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      timeout: 30s
+      api_version: v2
+
+# 抓取任务配置
+scrape_configs:
+  # Prometheus自监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Node Exporter - 系统指标
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: 
+        - 'node-exporter:9100'
+    metrics_path: /metrics
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(:[0-9]+)?'
+        replacement: '${1}'
+
+  # cAdvisor - 容器指标
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # DLMP Backend - 应用指标
+  - job_name: 'dlmp-backend'
+    static_configs:
+      - targets:
+        - 'dlmp-backend-1:8080'
+        - 'dlmp-backend-2:8080'
+        - 'dlmp-backend-3:8080'
+    metrics_path: /actuator/prometheus
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(:[0-9]+)?'
+        replacement: '${1}'
+      - target_label: service
+        replacement: 'dlmp-backend'
+
+  # Redis Exporter - Redis指标
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # MySQL Exporter - 数据库指标
+  - job_name: 'mysql-exporter'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Nginx Exporter - 负载均衡器指标
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # BlackBox Exporter - 网络探测
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://dlmp.example.com
+        - https://dlmp.example.com
+        - http://dlmp.example.com/api/health
+        - https://admin.dlmp.example.com
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # BlackBox Exporter - TCP探测
+  - job_name: 'blackbox-tcp'
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+        - mysql-master:3306
+        - redis-node-1:6379
+        - elasticsearch:9200
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Elasticsearch Exporter
+  - job_name: 'elasticsearch-exporter'
+    static_configs:
+      - targets: ['elasticsearch-exporter:9114']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Kafka Exporter (如果使用Kafka)
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # JVM Exporter - JVM详细指标
+  - job_name: 'jvm-exporter'
+    static_configs:
+      - targets:
+        - 'dlmp-backend-1:9999'  # JMX端口
+        - 'dlmp-backend-2:9999'
+        - 'dlmp-backend-3:9999'
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # 自定义业务指标
+  - job_name: 'dlmp-business-metrics'
+    static_configs:
+      - targets:
+        - 'dlmp-backend-1:8080'
+        - 'dlmp-backend-2:8080'
+        - 'dlmp-backend-3:8080'
+    metrics_path: /actuator/metrics
+    scrape_interval: 60s
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - target_label: service
+        replacement: 'dlmp-business'
+
+  # Kubernetes集群指标 (如果部署在K8s)
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+    - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+      action: keep
+      regex: default;kubernetes;https
+
+  # Consul服务发现 (如果使用Consul)
+  - job_name: 'consul-services'
+    consul_sd_configs:
+      - server: 'consul:8500'
+        services: ['dlmp-backend', 'dlmp-frontend']
+    relabel_configs:
+      - source_labels: [__meta_consul_service]
+        target_label: service
+      - source_labels: [__meta_consul_node]
+        target_label: node
+
+# 远程写入配置 (用于长期存储)
+remote_write:
+  - url: "http://thanos-receive:19291/api/v1/receive"
+    queue_config:
+      max_samples_per_send: 1000
+      capacity: 10000
+      max_shards: 10
+    metadata_config:
+      send: true
+      send_interval: 30s
+
+# 远程读取配置
+remote_read:
+  - url: "http://thanos-query:9090/api/v1/query"
+    read_recent: true

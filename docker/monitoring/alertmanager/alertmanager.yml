@@ -1,0 +1,310 @@
+# AlertManager配置文件
+# DLMP系统告警管理配置
+
+global:
+  # SMTP配置
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_from: 'alertmanager@dlmp.example.com'
+  smtp_auth_username: 'alertmanager@dlmp.example.com'
+  smtp_auth_password: 'your-email-password'
+  smtp_require_tls: true
+
+  # 解析超时
+  resolve_timeout: 5m
+
+# 模板配置
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# 路由配置
+route:
+  # 默认分组键
+  group_by: ['alertname', 'cluster', 'service']
+  
+  # 分组等待时间
+  group_wait: 10s
+  
+  # 分组间隔时间
+  group_interval: 10s
+  
+  # 重复发送间隔
+  repeat_interval: 1h
+  
+  # 默认接收器
+  receiver: 'default'
+  
+  # 子路由
+  routes:
+    # 严重告警立即通知
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      group_interval: 5s
+      repeat_interval: 15m
+      continue: true
+    
+    # 系统相关告警
+    - match:
+        category: system
+      receiver: 'system-alerts'
+      group_by: ['alertname', 'instance']
+      repeat_interval: 4h
+    
+    # 应用相关告警
+    - match:
+        category: application
+      receiver: 'application-alerts'
+      group_by: ['alertname', 'service', 'instance']
+      repeat_interval: 2h
+    
+    # 数据库相关告警
+    - match:
+        category: database
+      receiver: 'database-alerts'
+      group_by: ['alertname', 'instance']
+      repeat_interval: 1h
+    
+    # 网络相关告警
+    - match:
+        category: network
+      receiver: 'network-alerts'
+      group_by: ['alertname', 'instance']
+      repeat_interval: 30m
+    
+    # 业务相关告警
+    - match:
+        category: business
+      receiver: 'business-alerts'
+      group_by: ['alertname']
+      repeat_interval: 30m
+    
+    # 容器相关告警
+    - match:
+        category: container
+      receiver: 'devops-alerts'
+      group_by: ['alertname', 'container']
+      repeat_interval: 2h
+    
+    # 测试环境告警（降级处理）
+    - match:
+        cluster: dlmp-testing
+      receiver: 'testing-alerts'
+      group_interval: 5m
+      repeat_interval: 24h
+
+# 抑制规则
+inhibit_rules:
+  # 节点离线时抑制该节点的其他告警
+  - source_match:
+      alertname: NodeDown
+    target_match_re:
+      instance: '.*'
+    equal: ['instance']
+  
+  # 服务离线时抑制该服务的其他告警
+  - source_match:
+      alertname: ServiceDown
+    target_match_re:
+      alertname: 'High.*|.*Error.*'
+    equal: ['service', 'instance']
+  
+  # 严重告警抑制警告级别告警
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'instance']
+
+# 接收器配置
+receivers:
+  # 默认接收器
+  - name: 'default'
+    email_configs:
+      - to: 'admin@dlmp.example.com'
+        subject: 'DLMP告警通知'
+        body: |
+          {{ range .Alerts }}
+          告警名称: {{ .Annotations.summary }}
+          告警描述: {{ .Annotations.description }}
+          告警级别: {{ .Labels.severity }}
+          实例: {{ .Labels.instance }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # 严重告警接收器
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'admin@dlmp.example.com,manager@dlmp.example.com'
+        subject: '🚨 DLMP严重告警 🚨'
+        body: |
+          ⚠️ 检测到严重告警，请立即处理！
+          
+          {{ range .Alerts }}
+          📍 告警名称: {{ .Annotations.summary }}
+          📝 告警描述: {{ .Annotations.description }}
+          🔥 告警级别: {{ .Labels.severity }}
+          🖥️  实例: {{ .Labels.instance }}
+          ⏰ 开始时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          📊 当前值: {{ .Annotations.value }}
+          {{ end }}
+        headers:
+          Priority: 'high'
+    
+    webhook_configs:
+      - url: 'http://webhook-server:8080/alerts/critical'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'webhook_user'
+            password: 'webhook_password'
+    
+    # 钉钉机器人通知
+    webhook_configs:
+      - url: 'https://oapi.dingtalk.com/robot/send?access_token=YOUR_DINGTALK_TOKEN'
+        send_resolved: true
+        http_config:
+          proxy_url: 'http://proxy:8080'
+        title: 'DLMP严重告警'
+        text: |
+          ## 🚨 DLMP严重告警
+          {{ range .Alerts }}
+          **告警名称**: {{ .Annotations.summary }}
+          
+          **告警描述**: {{ .Annotations.description }}
+          
+          **告警级别**: {{ .Labels.severity }}
+          
+          **实例**: {{ .Labels.instance }}
+          
+          **时间**: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # 系统告警接收器
+  - name: 'system-alerts'
+    email_configs:
+      - to: 'sysadmin@dlmp.example.com'
+        subject: 'DLMP系统告警'
+        body: |
+          系统监控发现异常，请关注：
+          
+          {{ range .Alerts }}
+          告警: {{ .Annotations.summary }}
+          详情: {{ .Annotations.description }}
+          节点: {{ .Labels.instance }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # 应用告警接收器
+  - name: 'application-alerts'
+    email_configs:
+      - to: 'devteam@dlmp.example.com'
+        subject: 'DLMP应用告警'
+        body: |
+          应用监控发现异常，请及时处理：
+          
+          {{ range .Alerts }}
+          应用: {{ .Labels.service }}
+          告警: {{ .Annotations.summary }}
+          详情: {{ .Annotations.description }}
+          实例: {{ .Labels.instance }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # 数据库告警接收器
+  - name: 'database-alerts'
+    email_configs:
+      - to: 'dba@dlmp.example.com,devteam@dlmp.example.com'
+        subject: 'DLMP数据库告警'
+        body: |
+          数据库监控发现异常，请立即处理：
+          
+          {{ range .Alerts }}
+          数据库: {{ .Labels.job }}
+          告警: {{ .Annotations.summary }}
+          详情: {{ .Annotations.description }}
+          实例: {{ .Labels.instance }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # 网络告警接收器
+  - name: 'network-alerts'
+    email_configs:
+      - to: 'netadmin@dlmp.example.com'
+        subject: 'DLMP网络告警'
+        body: |
+          网络监控发现异常：
+          
+          {{ range .Alerts }}
+          目标: {{ .Labels.instance }}
+          告警: {{ .Annotations.summary }}
+          详情: {{ .Annotations.description }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # 业务告警接收器
+  - name: 'business-alerts'
+    email_configs:
+      - to: 'business@dlmp.example.com,manager@dlmp.example.com'
+        subject: 'DLMP业务告警'
+        body: |
+          业务监控发现异常，可能影响用户体验：
+          
+          {{ range .Alerts }}
+          业务指标: {{ .Labels.alertname }}
+          告警: {{ .Annotations.summary }}
+          详情: {{ .Annotations.description }}
+          当前值: {{ .Annotations.value }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # DevOps告警接收器
+  - name: 'devops-alerts'
+    email_configs:
+      - to: 'devops@dlmp.example.com'
+        subject: 'DLMP容器/编排告警'
+        body: |
+          容器或编排系统发现异常：
+          
+          {{ range .Alerts }}
+          容器: {{ .Labels.container }}
+          告警: {{ .Annotations.summary }}
+          详情: {{ .Annotations.description }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+  # 测试环境告警接收器
+  - name: 'testing-alerts'
+    email_configs:
+      - to: 'qa@dlmp.example.com'
+        subject: 'DLMP测试环境告警'
+        body: |
+          测试环境监控告警（非紧急）：
+          
+          {{ range .Alerts }}
+          告警: {{ .Annotations.summary }}
+          详情: {{ .Annotations.description }}
+          时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+
+# 时间窗口配置
+time_intervals:
+  # 工作时间
+  - name: 'business-hours'
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '18:00'
+        weekdays: ['monday:friday']
+        location: 'Asia/Shanghai'
+  
+  # 非工作时间
+  - name: 'after-hours'
+    time_intervals:
+      - times:
+          - start_time: '18:00'
+            end_time: '09:00'
+        weekdays: ['monday:friday']
+        location: 'Asia/Shanghai'
+      - weekdays: ['saturday', 'sunday']
+        location: 'Asia/Shanghai'

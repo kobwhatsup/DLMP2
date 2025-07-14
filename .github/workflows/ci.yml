@@ -1,0 +1,412 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+  JAVA_VERSION: '17'
+
+jobs:
+  # 代码质量检查
+  code-quality:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Run Prettier check
+        working-directory: ./frontend
+        run: npm run format -- --check
+
+      - name: TypeScript type check
+        working-directory: ./frontend
+        run: npm run type-check
+
+      - name: Setup SonarQube
+        uses: sonarqube-quality-gate-action@master
+        if: github.event_name == 'push'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # 前端测试
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run unit tests
+        working-directory: ./frontend
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+
+      - name: Install Playwright browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps
+
+      - name: Start frontend dev server
+        working-directory: ./frontend
+        run: |
+          npm run dev &
+          npx wait-on http://localhost:5173 --timeout 60000
+
+      - name: Run E2E tests
+        working-directory: ./frontend
+        run: npm run test:e2e
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: e2e-test-results-${{ matrix.node-version }}
+          path: frontend/test-results/
+          retention-days: 7
+
+  # 后端测试
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: dlmp_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        working-directory: ./backend
+        run: chmod +x gradlew
+
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/dlmp_test
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: testpass
+          SPRING_REDIS_HOST: localhost
+          SPRING_REDIS_PORT: 6379
+        run: ./gradlew test jacocoTestReport
+
+      - name: Upload backend coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./backend/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: backend
+          name: backend-coverage
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: backend/build/test-results/test/*.xml
+
+  # 安全扫描
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [frontend-test, backend-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Frontend dependency check
+        working-directory: ./frontend
+        run: |
+          npm audit --audit-level=high
+          npx license-checker --summary
+
+      - name: Backend dependency check
+        working-directory: ./backend
+        run: ./gradlew dependencyCheckAnalyze
+
+  # 构建和打包
+  build:
+    name: Build Applications
+    runs-on: ubuntu-latest
+    needs: [frontend-test, backend-test, security-scan]
+    strategy:
+      matrix:
+        component: [frontend, backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (Frontend)
+        if: matrix.component == 'frontend'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Setup Java (Backend)
+        if: matrix.component == 'backend'
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build Frontend
+        if: matrix.component == 'frontend'
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+          npm run analyze:bundle
+
+      - name: Build Backend
+        if: matrix.component == 'backend'
+        working-directory: ./backend
+        run: |
+          chmod +x gradlew
+          ./gradlew build -x test
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.component }}-build
+          path: |
+            ${{ matrix.component == 'frontend' && 'frontend/dist' || 'backend/build/libs' }}
+          retention-days: 7
+
+  # Docker镜像构建
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    strategy:
+      matrix:
+        component: [frontend, backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ matrix.component }}-build
+          path: ${{ matrix.component }}/dist
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.CONTAINER_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.CONTAINER_REGISTRY }}/dlmp-${{ matrix.component }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.component }}
+          file: ./${{ matrix.component }}/docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # 性能测试
+  performance-test:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Start application stack
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 30
+
+      - name: Wait for services
+        run: |
+          npx wait-on http://localhost:3000 --timeout 120000
+          npx wait-on http://localhost:8080/actuator/health --timeout 120000
+
+      - name: Run Lighthouse performance tests
+        working-directory: ./frontend
+        run: npm run test:performance
+
+      - name: Run load tests
+        working-directory: ./frontend
+        run: |
+          npm run test:load:medium
+          npm run test:load:api
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-reports
+          path: |
+            frontend/test-results/performance/
+            frontend/test-results/load-test/
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose -f docker-compose.test.yml down
+
+  # 通知
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [frontend-test, backend-test, security-scan, build, docker-build, performance-test]
+    if: always()
+    steps:
+      - name: Notify Slack on Success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#ci-cd'
+          message: '✅ CI Pipeline completed successfully for ${{ github.ref }}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on Failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#ci-cd'
+          message: '❌ CI Pipeline failed for ${{ github.ref }}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Send Email notification
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: 587
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: 'CI Pipeline Failed - ${{ github.repository }}'
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: 'CI/CD Bot <noreply@dlmp.com>'
+          body: |
+            CI Pipeline failed for repository ${{ github.repository }}
+            
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+            
+            Please check the workflow logs for details:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

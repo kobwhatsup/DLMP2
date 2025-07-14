@@ -1,0 +1,235 @@
+# 生产环境配置
+spring:
+  profiles:
+    active: production
+    
+  # 数据源配置 - 读写分离
+  datasource:
+    master:
+      url: jdbc:mysql://mysql-master:3306/dlmp?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+      username: ${DB_USERNAME:dlmp}
+      password: ${DB_PASSWORD:dlmp123456}
+      type: com.alibaba.druid.pool.DruidDataSource
+      
+    slave:
+      url: jdbc:mysql://mysql-slave:3306/dlmp?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+      username: ${DB_USERNAME:dlmp}
+      password: ${DB_PASSWORD:dlmp123456}
+      type: com.alibaba.druid.pool.DruidDataSource
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 50
+          fetch_size: 100
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+        connection:
+          provider_disables_autocommit: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+
+  # Redis配置 - 集群模式
+  redis:
+    cluster:
+      nodes:
+        - redis-node-1:6379
+        - redis-node-2:6379
+        - redis-node-3:6379
+        - redis-node-4:6379
+        - redis-node-5:6379
+        - redis-node-6:6379
+      max-redirects: 3
+    password: ${REDIS_PASSWORD:redis123456}
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 200
+        max-idle: 20
+        min-idle: 10
+        max-wait: 1000ms
+      shutdown-timeout: 100ms
+
+  # 缓存配置
+  cache:
+    type: redis
+    cache-names:
+      - userCache
+      - caseCache
+      - systemCache
+    redis:
+      time-to-live: 1800s
+      cache-null-values: false
+      key-prefix: "dlmp:cache:"
+      use-key-prefix: true
+
+  # RabbitMQ配置 - 集群模式
+  rabbitmq:
+    addresses: rabbitmq-node-1:5672,rabbitmq-node-2:5672,rabbitmq-node-3:5672
+    username: ${MQ_USERNAME:dlmp}
+    password: ${MQ_PASSWORD:mq123456}
+    virtual-host: dlmp-prod
+    connection-timeout: 15s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+        prefetch: 10
+        concurrency: 5
+        max-concurrency: 10
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  tomcat:
+    threads:
+      max: 500
+      min-spare: 100
+    max-connections: 10000
+    accept-count: 200
+    connection-timeout: 30s
+    max-http-form-post-size: 10MB
+    max-swallow-size: 10MB
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+# 应用配置
+app:
+  # 文件存储配置
+  file:
+    upload-path: /data/dlmp/files
+    max-size: 104857600 # 100MB
+    allowed-types: .pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt,.zip,.rar
+    
+  # 安全配置
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dlmp-secret-key-for-production-environment}
+      expiration: 7200 # 2小时
+      refresh-expiration: 604800 # 7天
+    
+  # 业务配置
+  business:
+    case:
+      auto-assignment: true
+      assignment-algorithm: intelligent
+    mediation:
+      timeout-days: 30
+      reminder-days: 3
+    litigation:
+      timeout-days: 90
+      reminder-days: 7
+
+# 日志配置
+logging:
+  level:
+    com.dlmp: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    com.alibaba.druid: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%logger{50}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%logger{50}] - %msg%n"
+  file:
+    name: /var/log/dlmp/application.log
+    max-size: 100MB
+    max-history: 30
+
+# Actuator监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        spring.data.repository.invocations: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+        spring.data.repository.invocations: 0.5,0.9,0.95,0.99
+
+# Swagger配置（生产环境禁用）
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# 国际化配置
+spring.messages:
+  basename: i18n/messages
+  encoding: UTF-8
+  cache-duration: 3600s
+
+# 线程池配置
+spring.task:
+  execution:
+    pool:
+      core-size: 20
+      max-size: 100
+      queue-capacity: 1000
+      keep-alive: 60s
+    thread-name-prefix: dlmp-task-
+  scheduling:
+    pool:
+      size: 10
+    thread-name-prefix: dlmp-scheduled-
+
+# JVM调优参数（在启动脚本中配置）
+# -server
+# -Xms2g
+# -Xmx4g
+# -XX:+UseG1GC
+# -XX:MaxGCPauseMillis=200
+# -XX:+UseStringDeduplication
+# -XX:+OptimizeStringConcat
+# -XX:+UseCompressedOops
+# -XX:+UseCompressedClassPointers
+# -Djava.awt.headless=true
+# -Dfile.encoding=UTF-8
+# -Duser.timezone=Asia/Shanghai

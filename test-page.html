@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLMP系统测试页面</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>DLMP 系统功能测试</h1>
+    
+    <div class="test-section">
+        <h3>后端API测试</h3>
+        <button onclick="testHealth()">测试健康检查</button>
+        <button onclick="testCaseAPI()">测试案件API</button>
+        <button onclick="testUserAPI()">测试用户API</button>
+        <div id="api-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>前端页面测试</h3>
+        <button onclick="testFrontend()">测试前端页面</button>
+        <div id="frontend-results"></div>
+    </div>
+
+    <script>
+        async function testHealth() {
+            try {
+                const response = await fetch('http://localhost:8080/api/health');
+                const data = await response.json();
+                document.getElementById('api-results').innerHTML = 
+                    `<div class="success">✅ 健康检查成功: ${data.message}</div>`;
+            } catch (error) {
+                document.getElementById('api-results').innerHTML = 
+                    `<div class="error">❌ 健康检查失败: ${error.message}</div>`;
+            }
+        }
+
+        async function testCaseAPI() {
+            try {
+                const response = await fetch('http://localhost:8080/case/cases?page=1&size=5');
+                const data = await response.json();
+                document.getElementById('api-results').innerHTML += 
+                    `<div class="success">✅ 案件API成功: 获取到 ${data.data.total} 条案件数据</div>`;
+            } catch (error) {
+                document.getElementById('api-results').innerHTML += 
+                    `<div class="error">❌ 案件API失败: ${error.message}</div>`;
+            }
+        }
+
+        async function testUserAPI() {
+            try {
+                const response = await fetch('http://localhost:8080/user/users?page=1&size=5');
+                const data = await response.json();
+                document.getElementById('api-results').innerHTML += 
+                    `<div class="success">✅ 用户API成功: 获取到 ${data.data.total} 条用户数据</div>`;
+            } catch (error) {
+                document.getElementById('api-results').innerHTML += 
+                    `<div class="error">❌ 用户API失败: ${error.message}</div>`;
+            }
+        }
+
+        async function testFrontend() {
+            try {
+                const response = await fetch('http://localhost:5173');
+                if (response.ok) {
+                    document.getElementById('frontend-results').innerHTML = 
+                        `<div class="success">✅ 前端页面正常访问</div>
+                         <div><a href="http://localhost:5173" target="_blank">点击访问前端页面</a></div>`;
+                } else {
+                    document.getElementById('frontend-results').innerHTML = 
+                        `<div class="error">❌ 前端页面访问失败: ${response.status}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('frontend-results').innerHTML = 
+                    `<div class="error">❌ 前端页面访问失败: ${error.message}</div>`;
+            }
+        }
+
+        // 自动运行测试
+        window.onload = function() {
+            testHealth();
+            setTimeout(testCaseAPI, 500);
+            setTimeout(testUserAPI, 1000);
+            setTimeout(testFrontend, 1500);
+        };
+    </script>
+</body>
+</html>

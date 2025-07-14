@@ -357,27 +357,26 @@ export interface MediationCase {
   caseId: number
   caseNumber: string
   borrowerName: string
-  debtAmount: number
-  phone: string
-  address?: string
+  amount: number
+  debtorIdCard?: string
+  debtorPhone?: string
+  clientName?: string
   mediatorId: number
   mediatorName: string
   mediationCenterId: number
   mediationCenterName: string
-  status: MediationStatus
-  currentStep: number
-  progress: number
-  startTime?: string
-  deadline?: string
+  status: number
+  step: number
   mediationMethod?: string
   mediationLocation?: string
   appointmentTime?: string
   expectedDuration?: number
   mediationPlan?: string
   remarks?: string
-  description?: string
   createTime: string
   updateTime?: string
+  agreementAmount?: number
+  paymentSchedule?: string
 }
 
 /**
