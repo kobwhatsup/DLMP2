@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Card,
   Button,
@@ -26,7 +26,8 @@ import {
   Descriptions,
   Radio,
   Timeline,
-  Empty
+  Empty,
+  Upload
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -45,7 +46,9 @@ import {
   SendOutlined,
   DownloadOutlined,
   BankOutlined,
-  DollarOutlined
+  DollarOutlined,
+  UploadOutlined,
+  InboxOutlined
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { LitigationCase, CourtEvent } from '@/types'
@@ -108,12 +111,16 @@ const LitigationManagement: React.FC = () => {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false)
   const [isEventModalVisible, setIsEventModalVisible] = useState(false)
   const [isDocumentModalVisible, setIsDocumentModalVisible] = useState(false)
+  const [isTemplateModalVisible, setIsTemplateModalVisible] = useState(false)
   const [availableMediationCases, setAvailableMediationCases] = useState<any[]>([])
+  const templateContentRef = useRef<any>(null)
+  const [uploadMode, setUploadMode] = useState(false)
   const [form] = Form.useForm()
   const [createForm] = Form.useForm()
   const [editForm] = Form.useForm()
   const [eventForm] = Form.useForm()
   const [documentForm] = Form.useForm()
+  const [templateForm] = Form.useForm()
 
   // 诉讼案件表格列
   const caseColumns: ColumnsType<LitigationCase> = [
@@ -341,6 +348,239 @@ const LitigationManagement: React.FC = () => {
       setState(prev => ({ ...prev, documentTemplates: templates }))
     } catch (error) {
       message.error('获取文书模板失败')
+    }
+  }
+
+  // 保存法院事件
+  const handleSaveEvent = async () => {
+    try {
+      const values = await eventForm.validateFields()
+      
+      if (!state.currentCase) {
+        message.error('请选择案件')
+        return
+      }
+
+      // 处理日期格式
+      const eventData = {
+        ...values,
+        scheduledTime: values.scheduledTime ? values.scheduledTime.format('YYYY-MM-DD HH:mm:ss') : null
+      }
+
+      await litigationService.addCourtEvent(state.currentCase.id, eventData)
+      
+      message.success('法院事件添加成功')
+      setIsEventModalVisible(false)
+      
+      // 如果当前在查看案件详情，刷新事件列表
+      if (isDetailModalVisible) {
+        const response = await litigationService.getCourtEvents(state.currentCase.id)
+        const events = response?.data || []
+        setState(prev => ({ ...prev, courtEvents: events }))
+      }
+    } catch (error) {
+      message.error('添加法院事件失败')
+    }
+  }
+
+  // 保存生成文书
+  const handleSaveDocument = async () => {
+    try {
+      const values = await documentForm.validateFields()
+      
+      if (!state.currentCase) {
+        message.error('请选择案件')
+        return
+      }
+
+      // 构建文书生成参数
+      const documentData = {
+        templateId: values.templateId,
+        name: values.name,
+        type: values.type,
+        enableSignature: values.enableSignature || false,
+        description: values.description,
+        // 自动填充案件变量
+        variables: {
+          caseNumber: state.currentCase.caseNumber,
+          borrowerName: state.currentCase.borrowerName,
+          debtAmount: state.currentCase.debtAmount,
+          courtName: state.currentCase.courtName,
+          judgeName: state.currentCase.judgeName || '',
+          currentDate: dayjs().format('YYYY年MM月DD日')
+        }
+      }
+
+      const response = await litigationService.generateDocument(state.currentCase.id, documentData)
+      
+      message.success('文书生成成功')
+      setIsDocumentModalVisible(false)
+      
+      // 提示下载
+      if (response?.data?.downloadUrl) {
+        message.info('文书已生成，可在案件详情中查看和下载')
+      }
+    } catch (error) {
+      message.error('生成文书失败')
+    }
+  }
+
+  // 快速创建模板
+  const handleQuickCreateTemplate = () => {
+    try {
+      templateForm.resetFields()
+      setUploadMode(false)
+      setIsTemplateModalVisible(true)
+    } catch (error) {
+      console.error('打开模板弹窗失败:', error)
+      message.error('打开模板弹窗失败')
+    }
+  }
+
+  // 关闭模板弹窗
+  const handleCloseTemplateModal = () => {
+    try {
+      setIsTemplateModalVisible(false)
+      setUploadMode(false)
+      templateForm.resetFields()
+    } catch (error) {
+      console.error('关闭模板弹窗失败:', error)
+    }
+  }
+
+  // 保存新建模板
+  const handleSaveTemplate = async () => {
+    try {
+      const values = await templateForm.validateFields()
+      
+      const templateData = {
+        name: values.name,
+        type: values.type,
+        description: values.description,
+        content: values.content,
+        variables: values.variables ? values.variables.split(',').map(v => v.trim()).filter(v => v) : [],
+        category: values.category || 'litigation',
+        fileType: values.fileType || 'docx'
+      }
+
+      const response = await litigationService.createDocumentTemplate(templateData)
+      
+      message.success('模板创建成功')
+      handleCloseTemplateModal() // 使用统一的关闭函数
+      
+      // 刷新模板列表
+      const templatesResponse = await litigationService.getDocumentTemplates()
+      const templates = templatesResponse?.data || []
+      setState(prev => ({ ...prev, documentTemplates: templates }))
+      
+      // 自动选择新创建的模板
+      if (response?.data?.id) {
+        documentForm.setFieldsValue({ templateId: response.data.id })
+      }
+    } catch (error) {
+      console.error('创建模板失败:', error)
+      message.error('创建模板失败')
+    }
+  }
+
+  // 刷新模板列表
+  const handleRefreshTemplates = async () => {
+    try {
+      const response = await litigationService.getDocumentTemplates()
+      const templates = response?.data || []
+      setState(prev => ({ ...prev, documentTemplates: templates }))
+      message.success('模板列表已刷新')
+    } catch (error) {
+      message.error('刷新模板列表失败')
+    }
+  }
+
+  // 插入变量到模板内容
+  const handleInsertVariable = (variable: string) => {
+    try {
+      const currentValue = templateForm.getFieldValue('content') || ''
+      
+      // 尝试获取光标位置
+      if (templateContentRef.current && 
+          templateContentRef.current.resizableTextArea && 
+          templateContentRef.current.resizableTextArea.textArea) {
+        
+        const textArea = templateContentRef.current.resizableTextArea.textArea
+        const startPos = textArea.selectionStart || 0
+        const endPos = textArea.selectionEnd || 0
+        
+        const newValue = currentValue.substring(0, startPos) + 
+                        '${' + variable + '}' + 
+                        currentValue.substring(endPos)
+        
+        templateForm.setFieldsValue({ content: newValue })
+        
+        // 延迟设置光标位置
+        requestAnimationFrame(() => {
+          try {
+            const newPos = startPos + variable.length + 3
+            textArea.setSelectionRange(newPos, newPos)
+            textArea.focus()
+          } catch (e) {
+            // 忽略光标设置错误
+          }
+        })
+      } else {
+        // 简单追加到末尾
+        const newValue = currentValue + (currentValue ? '\n' : '') + '${' + variable + '}'
+        templateForm.setFieldsValue({ content: newValue })
+      }
+      
+      message.success(`已插入变量: \${${variable}}`)
+    } catch (error) {
+      console.error('插入变量时出错:', error)
+      message.error('插入变量失败')
+    }
+  }
+
+  // 处理文件上传模式切换
+  const handleUploadModeChange = (e: any) => {
+    setUploadMode(e.target.value)
+    if (e.target.value) {
+      // 切换到上传模式，清空手动输入的内容
+      templateForm.setFieldsValue({ content: '' })
+    }
+  }
+
+  // 处理文件上传
+  const handleFileUpload = (info: any) => {
+    const { status, originFileObj } = info.file
+    
+    if (status === 'uploading') {
+      return
+    }
+    
+    if (status === 'done' || status === 'removed') {
+      if (originFileObj) {
+        // 模拟文件解析过程
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const content = e.target?.result as string
+          // 这里可以根据文件类型进行不同的解析
+          let parsedContent = ''
+          
+          if (originFileObj.type === 'text/html') {
+            // HTML文件解析
+            parsedContent = content.replace(/<[^>]*>/g, '').trim()
+          } else {
+            // 其他文件类型的简单处理
+            parsedContent = `已上传文件: ${originFileObj.name}\n\n模板内容将从文件中解析...\n\n可用变量:\n\${caseNumber} - 案件编号\n\${borrowerName} - 借款人姓名\n\${debtAmount} - 债务金额\n\${courtName} - 法院名称\n\${currentDate} - 当前日期`
+          }
+          
+          templateForm.setFieldsValue({ content: parsedContent })
+          message.success('文件上传成功，内容已解析')
+        }
+        reader.readAsText(originFileObj)
+      }
+    }
+    
+    if (status === 'error') {
+      message.error('文件上传失败')
     }
   }
 
@@ -911,6 +1151,485 @@ const LitigationManagement: React.FC = () => {
           >
             <TextArea rows={2} placeholder="请输入备注信息" />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 添加法院事件弹窗 */}
+      <Modal
+        title="添加法院事件"
+        open={isEventModalVisible}
+        onOk={handleSaveEvent}
+        onCancel={() => setIsEventModalVisible(false)}
+        width={600}
+        okText="添加"
+        cancelText="取消"
+      >
+        <Form form={eventForm} layout="vertical">
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="type"
+                label="事件类型"
+                rules={[{ required: true, message: '请选择事件类型' }]}
+              >
+                <Select placeholder="请选择事件类型">
+                  <Option value="hearing">开庭审理</Option>
+                  <Option value="mediation">庭前调解</Option>
+                  <Option value="evidence">证据交换</Option>
+                  <Option value="judgment">宣读判决</Option>
+                  <Option value="execution">执行事项</Option>
+                  <Option value="other">其他事件</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="status"
+                label="事件状态"
+                rules={[{ required: true, message: '请选择事件状态' }]}
+              >
+                <Select placeholder="请选择事件状态">
+                  <Option value="scheduled">已安排</Option>
+                  <Option value="completed">已完成</Option>
+                  <Option value="cancelled">已取消</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="title"
+            label="事件标题"
+            rules={[{ required: true, message: '请输入事件标题' }]}
+          >
+            <Input placeholder="请输入事件标题" />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="scheduledTime"
+                label="安排时间"
+                rules={[{ required: true, message: '请选择安排时间' }]}
+              >
+                <DatePicker 
+                  showTime={{ format: 'HH:mm' }}
+                  format="YYYY-MM-DD HH:mm"
+                  placeholder="请选择安排时间" 
+                  style={{ width: '100%' }} 
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="location"
+                label="地点"
+              >
+                <Input placeholder="请输入地点" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="description"
+            label="事件描述"
+            rules={[{ required: true, message: '请输入事件描述' }]}
+          >
+            <TextArea rows={3} placeholder="请输入事件描述" />
+          </Form.Item>
+
+          <Form.Item
+            name="result"
+            label="事件结果"
+          >
+            <TextArea rows={2} placeholder="事件完成后填写结果（可选）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 生成文书弹窗 */}
+      <Modal
+        title="生成诉讼文书"
+        open={isDocumentModalVisible}
+        onOk={handleSaveDocument}
+        onCancel={() => setIsDocumentModalVisible(false)}
+        width={700}
+        okText="生成"
+        cancelText="取消"
+      >
+        <Form form={documentForm} layout="vertical">
+          <Form.Item
+            name="templateId"
+            label={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>选择文书模板</span>
+                <Button 
+                  type="link" 
+                  size="small" 
+                  icon={<PlusOutlined />}
+                  onClick={handleQuickCreateTemplate}
+                  style={{ padding: 0, height: 'auto' }}
+                >
+                  新建模板
+                </Button>
+                <Button 
+                  type="link" 
+                  size="small" 
+                  icon={<ReloadOutlined />}
+                  onClick={handleRefreshTemplates}
+                  style={{ padding: 0, height: 'auto' }}
+                >
+                  刷新
+                </Button>
+              </div>
+            }
+            rules={[{ required: true, message: '请选择文书模板' }]}
+          >
+            <Select 
+              placeholder="请选择要使用的文书模板"
+              showSearch
+              filterOption={(input, option) =>
+                (option?.children as any)?.props?.children?.[0]?.props?.children
+                  ?.toLowerCase()
+                  ?.includes(input.toLowerCase())
+              }
+              dropdownRender={(menu) => (
+                <div>
+                  {menu}
+                  <Divider style={{ margin: '8px 0' }} />
+                  <Space style={{ padding: '0 8px 4px' }}>
+                    <Button 
+                      type="primary" 
+                      icon={<PlusOutlined />} 
+                      size="small"
+                      onClick={handleQuickCreateTemplate}
+                    >
+                      新建模板
+                    </Button>
+                    <Button 
+                      icon={<ReloadOutlined />} 
+                      size="small"
+                      onClick={handleRefreshTemplates}
+                    >
+                      刷新列表
+                    </Button>
+                  </Space>
+                </div>
+              )}
+            >
+              {state.documentTemplates.length === 0 ? (
+                <Option disabled value="">
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                    <div>暂无模板</div>
+                    <Button 
+                      type="link" 
+                      size="small" 
+                      onClick={handleQuickCreateTemplate}
+                    >
+                      点击创建新模板
+                    </Button>
+                  </div>
+                </Option>
+              ) : (
+                state.documentTemplates.map(template => (
+                  <Option key={template.id} value={template.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{template.name}</div>
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          {template.description}
+                        </div>
+                      </div>
+                      <Space>
+                        <Tag color="blue">{template.type}</Tag>
+                        <Tag color="green">{template.category}</Tag>
+                      </Space>
+                    </div>
+                  </Option>
+                ))
+              )}
+            </Select>
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="name"
+                label="文书名称"
+                rules={[{ required: true, message: '请输入文书名称' }]}
+              >
+                <Input placeholder="请输入生成的文书名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="type"
+                label="文书类型"
+                rules={[{ required: true, message: '请选择文书类型' }]}
+              >
+                <Select placeholder="请选择文书类型">
+                  <Option value="complaint">起诉状</Option>
+                  <Option value="mediation">调解书</Option>
+                  <Option value="judgment">判决书</Option>
+                  <Option value="execution">执行书</Option>
+                  <Option value="notice">通知书</Option>
+                  <Option value="other">其他文书</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="enableSignature"
+            label="电子签章"
+            valuePropName="checked"
+          >
+            <Radio.Group>
+              <Radio value={true}>启用电子签章</Radio>
+              <Radio value={false}>不使用签章</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item
+            name="variables"
+            label="模板变量"
+          >
+            <div style={{ 
+              border: '1px solid #d9d9d9', 
+              borderRadius: '6px', 
+              padding: '12px',
+              backgroundColor: '#fafafa'
+            }}>
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                系统将自动填入以下变量：案件编号、当事人信息、债务金额、法院信息等
+              </Text>
+              <div style={{ marginTop: '8px' }}>
+                <Tag>{'${caseNumber}'}</Tag>
+                <Tag>{'${borrowerName}'}</Tag>
+                <Tag>{'${debtAmount}'}</Tag>
+                <Tag>{'${courtName}'}</Tag>
+                <Tag>{'${judgeName}'}</Tag>
+                <Tag>{'${currentDate}'}</Tag>
+              </div>
+            </div>
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="备注说明"
+          >
+            <TextArea rows={2} placeholder="请输入生成文书的备注说明（可选）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 新建模板弹窗 - 优化版 */}
+      <Modal
+        title="新建文书模板"
+        open={isTemplateModalVisible}
+        onOk={handleSaveTemplate}
+        onCancel={handleCloseTemplateModal}
+        width={900}
+        style={{ top: 20 }}
+        bodyStyle={{ 
+          maxHeight: 'calc(100vh - 200px)', 
+          overflowY: 'auto',
+          padding: '20px'
+        }}
+        confirmLoading={state.loading}
+        okText="创建模板"
+        cancelText="取消"
+      >
+        <Form form={templateForm} layout="vertical">
+          {/* 基本信息区域 */}
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                name="name"
+                label="模板名称"
+                rules={[{ required: true, message: '请输入模板名称' }]}
+              >
+                <Input placeholder="请输入模板名称" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="type"
+                label="模板类型"
+                rules={[{ required: true, message: '请选择模板类型' }]}
+              >
+                <Select placeholder="请选择模板类型">
+                  <Option value="complaint">起诉状</Option>
+                  <Option value="mediation">调解书</Option>
+                  <Option value="judgment">判决书</Option>
+                  <Option value="execution">执行书</Option>
+                  <Option value="notice">通知书</Option>
+                  <Option value="summons">传票</Option>
+                  <Option value="appeal">上诉状</Option>
+                  <Option value="other">其他文书</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="category"
+                label="模板分类"
+                rules={[{ required: true, message: '请选择模板分类' }]}
+              >
+                <Select placeholder="请选择模板分类">
+                  <Option value="litigation">诉讼类</Option>
+                  <Option value="mediation">调解类</Option>
+                  <Option value="execution">执行类</Option>
+                  <Option value="notice">通知类</Option>
+                  <Option value="contract">合同类</Option>
+                  <Option value="other">其他</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="fileType"
+                label="文件格式"
+                rules={[{ required: true, message: '请选择文件格式' }]}
+              >
+                <Select placeholder="请选择文件格式">
+                  <Option value="docx">Word文档 (.docx)</Option>
+                  <Option value="pdf">PDF文档 (.pdf)</Option>
+                  <Option value="html">网页格式 (.html)</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="description"
+                label="模板描述"
+              >
+                <Input placeholder="请输入模板的简要描述" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* 内容输入方式选择 */}
+          <Form.Item label="内容输入方式">
+            <Radio.Group value={uploadMode} onChange={handleUploadModeChange}>
+              <Radio value={false}>手动输入模板内容</Radio>
+              <Radio value={true}>上传模板文件</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Row gutter={16}>
+            {/* 左侧：模板内容输入 */}
+            <Col span={16}>
+              {!uploadMode ? (
+                <Form.Item
+                  name="content"
+                  label="模板内容"
+                  rules={[{ required: true, message: '请输入模板内容' }]}
+                >
+                  <TextArea 
+                    ref={templateContentRef}
+                    rows={12} 
+                    placeholder="请输入模板内容，可点击右侧变量快速插入..."
+                    style={{ fontSize: '14px', lineHeight: '1.6' }}
+                  />
+                </Form.Item>
+              ) : (
+                <Form.Item label="上传模板文件">
+                  <Upload.Dragger
+                    accept=".docx,.doc,.pdf,.html,.htm,.txt"
+                    beforeUpload={() => false}
+                    onChange={handleFileUpload}
+                    maxCount={1}
+                    showUploadList={{
+                      showPreviewIcon: false,
+                      showDownloadIcon: false,
+                    }}
+                  >
+                    <p className="ant-upload-drag-icon">
+                      <InboxOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
+                    </p>
+                    <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
+                    <p className="ant-upload-hint">
+                      支持 .docx, .pdf, .html, .txt 格式的模板文件
+                    </p>
+                  </Upload.Dragger>
+                  
+                  {uploadMode && (
+                    <Form.Item
+                      name="content"
+                      style={{ marginTop: '16px' }}
+                      rules={[{ required: true, message: '请上传文件或输入内容' }]}
+                    >
+                      <TextArea 
+                        rows={8} 
+                        placeholder="文件上传后解析的内容将显示在这里，您也可以手动编辑..."
+                        style={{ fontSize: '14px', lineHeight: '1.6' }}
+                      />
+                    </Form.Item>
+                  )}
+                </Form.Item>
+              )}
+            </Col>
+
+            {/* 右侧：可用变量 */}
+            <Col span={8}>
+              <Form.Item label="可用变量（点击插入）">
+                <div style={{ 
+                  border: '1px solid #d9d9d9', 
+                  borderRadius: '6px', 
+                  padding: '12px',
+                  backgroundColor: '#f6f8fa',
+                  maxHeight: '300px',
+                  overflowY: 'auto'
+                }}>
+                  <Text type="secondary" style={{ fontSize: '12px', marginBottom: '8px', display: 'block' }}>
+                    点击下方变量可快速插入到模板内容中：
+                  </Text>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {[
+                      { key: 'caseNumber', label: '案件编号', color: 'blue' },
+                      { key: 'borrowerName', label: '借款人姓名', color: 'green' },
+                      { key: 'borrowerIdCard', label: '借款人身份证', color: 'orange' },
+                      { key: 'debtAmount', label: '债务金额', color: 'purple' },
+                      { key: 'courtName', label: '法院名称', color: 'cyan' },
+                      { key: 'judgeName', label: '法官姓名', color: 'red' },
+                      { key: 'clientName', label: '委托方名称', color: 'gold' },
+                      { key: 'debtorPhone', label: '债务人电话', color: 'lime' },
+                      { key: 'currentDate', label: '当前日期', color: 'magenta' },
+                      { key: 'trialDate', label: '开庭日期', color: 'volcano' },
+                      { key: 'courtroom', label: '法庭', color: 'geekblue' }
+                    ].map(variable => (
+                      <Tag 
+                        key={variable.key}
+                        color={variable.color} 
+                        style={{ 
+                          margin: '2px',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          fontSize: '12px',
+                          padding: '4px 8px'
+                        }}
+                        onClick={() => handleInsertVariable(variable.key)}
+                      >
+                        ${variable.key} - {variable.label}
+                      </Tag>
+                    ))}
+                  </div>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <Alert 
+                    message="使用提示" 
+                    description="变量格式为 ${变量名}，系统会自动替换为实际值。" 
+                    type="info" 
+                    showIcon 
+                    size="small"
+                  />
+                </div>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </div>

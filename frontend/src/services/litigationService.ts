@@ -150,6 +150,26 @@ export const litigationService = {
   },
 
   /**
+   * 创建文书模板
+   */
+  createDocumentTemplate: (templateData: {
+    name: string
+    type: string
+    description?: string
+    variables?: string[]
+    category?: string
+  }): Promise<{ data: any }> => {
+    return http.post('/litigation/document-templates', templateData)
+  },
+
+  /**
+   * 删除文书模板
+   */
+  deleteDocumentTemplate: (templateId: number): Promise<string> => {
+    return http.delete(`/litigation/document-templates/${templateId}`)
+  },
+
+  /**
    * 生成诉讼文书
    */
   generateDocument: (caseId: number, params: any): Promise<{ data: any }> => {

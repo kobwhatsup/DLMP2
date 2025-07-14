@@ -1181,10 +1181,12 @@ const mockMediationRecords = [
 
 // Mock文书模板数据
 const mockDocumentTemplates = [
+  // 调解类模板
   {
     id: 1,
     name: '调解协议书',
-    type: 'agreement',
+    type: 'mediation',
+    category: 'mediation',
     description: '标准调解协议书模板',
     templateUrl: '/templates/mediation_agreement.docx',
     variables: ['borrowerName', 'creditorName', 'amount', 'paymentSchedule'],
@@ -1193,7 +1195,8 @@ const mockDocumentTemplates = [
   {
     id: 2,
     name: '调解通知书',
-    type: 'notification',
+    type: 'notice',
+    category: 'mediation',
     description: '调解通知书模板',
     templateUrl: '/templates/mediation_notice.docx',
     variables: ['borrowerName', 'caseNumber', 'mediationTime', 'mediationLocation'],
@@ -1202,11 +1205,90 @@ const mockDocumentTemplates = [
   {
     id: 3,
     name: '调解失败确认书',
-    type: 'failure',
+    type: 'notice',
+    category: 'mediation',
     description: '调解失败确认书模板',
     templateUrl: '/templates/mediation_failure.docx',
     variables: ['borrowerName', 'creditorName', 'caseNumber', 'failureReason'],
     createTime: '2024-01-01 00:00:00'
+  },
+  // 诉讼类模板
+  {
+    id: 4,
+    name: '民事起诉状',
+    type: 'complaint',
+    category: 'litigation',
+    description: '民事起诉状标准模板，适用于债权债务纠纷案件',
+    templateUrl: '/templates/civil_complaint.docx',
+    variables: ['caseNumber', 'borrowerName', 'borrowerIdCard', 'debtAmount', 'courtName', 'currentDate', 'clientName'],
+    content: '民事起诉状\n\n原告：${clientName}\n被告：${borrowerName}，身份证号：${borrowerIdCard}\n\n诉讼请求：\n1. 请求法院判令被告偿还债务人民币${debtAmount}元\n2. 本案诉讼费用由被告承担\n\n事实与理由：\n...\n\n此致\n${courtName}\n\n起诉人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 10:00:00'
+  },
+  {
+    id: 5,
+    name: '执行申请书',
+    type: 'execution',
+    category: 'litigation',
+    description: '强制执行申请书模板',
+    templateUrl: '/templates/execution_application.docx',
+    variables: ['caseNumber', 'borrowerName', 'judgmentAmount', 'courtName', 'currentDate', 'clientName'],
+    content: '执行申请书\n\n申请执行人：${clientName}\n被执行人：${borrowerName}\n\n申请执行标的：人民币${judgmentAmount}元\n\n申请执行依据：${courtName}作出的民事判决书（案件编号：${caseNumber}）\n\n申请执行事项：\n1. 强制执行判决书确定的债务\n2. 执行费用由被执行人承担\n\n此致\n${courtName}\n\n申请人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 11:00:00'
+  },
+  {
+    id: 6,
+    name: '庭审传票',
+    type: 'summons',
+    category: 'litigation',
+    description: '法院庭审传票模板',
+    templateUrl: '/templates/court_summons.docx',
+    variables: ['caseNumber', 'borrowerName', 'trialDate', 'courtName', 'courtroom'],
+    content: '传票\n\n${borrowerName}：\n\n本院受理的${clientName}诉你债权债务纠纷一案（案件编号：${caseNumber}），定于${trialDate}在${courtName}${courtroom}开庭审理，你应准时到庭参加诉讼。\n\n如不到庭，将依法缺席判决。\n\n特此传唤\n\n${courtName}\n日期：${currentDate}',
+    createTime: '2024-01-15 12:00:00'
+  },
+  {
+    id: 7,
+    name: '财产保全申请书',
+    type: 'other',
+    category: 'litigation',
+    description: '诉前财产保全申请书模板',
+    templateUrl: '/templates/property_preservation.docx',
+    variables: ['caseNumber', 'borrowerName', 'preservationAmount', 'courtName', 'currentDate', 'clientName'],
+    content: '财产保全申请书\n\n申请人：${clientName}\n被申请人：${borrowerName}\n\n申请事项：\n请求法院对被申请人的财产采取保全措施，保全金额为人民币${preservationAmount}元。\n\n申请理由：\n...\n\n此致\n${courtName}\n\n申请人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 13:00:00'
+  },
+  {
+    id: 8,
+    name: '上诉状',
+    type: 'appeal',
+    category: 'litigation',
+    description: '民事上诉状模板',
+    templateUrl: '/templates/civil_appeal.docx',
+    variables: ['caseNumber', 'borrowerName', 'firstInstanceCourt', 'secondInstanceCourt', 'currentDate', 'clientName'],
+    content: '民事上诉状\n\n上诉人：${clientName}\n被上诉人：${borrowerName}\n\n上诉请求：\n1. 请求二审法院撤销${firstInstanceCourt}作出的民事判决书\n2. 依法改判支持上诉人的诉讼请求\n\n上诉理由：\n...\n\n此致\n${secondInstanceCourt}\n\n上诉人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 14:00:00'
+  },
+  {
+    id: 9,
+    name: '举证通知书',
+    type: 'notice',
+    category: 'litigation',
+    description: '举证通知书模板',
+    templateUrl: '/templates/evidence_notice.docx',
+    variables: ['caseNumber', 'borrowerName', 'evidenceDeadline', 'courtName', 'currentDate'],
+    content: '举证通知书\n\n${borrowerName}：\n\n本院受理的债权债务纠纷案件（案件编号：${caseNumber}），现通知你应在${evidenceDeadline}前提交相关证据材料。\n\n逾期提供证据的，将承担相应的法律后果。\n\n${courtName}\n日期：${currentDate}',
+    createTime: '2024-01-15 15:00:00'
+  },
+  {
+    id: 10,
+    name: '和解协议书',
+    type: 'other',
+    category: 'litigation',
+    description: '诉讼中和解协议书模板',
+    templateUrl: '/templates/litigation_settlement.docx',
+    variables: ['caseNumber', 'borrowerName', 'settlementAmount', 'paymentDate', 'currentDate', 'clientName'],
+    content: '和解协议书\n\n甲方：${clientName}\n乙方：${borrowerName}\n\n就案件编号为${caseNumber}的债权债务纠纷，双方达成如下和解协议：\n\n一、乙方同意向甲方支付人民币${settlementAmount}元\n二、付款时间：${paymentDate}\n三、本协议生效后，甲方撤回起诉\n\n甲方：${clientName}    乙方：${borrowerName}\n日期：${currentDate}',
+    createTime: '2024-01-15 16:00:00'
   }
 ];
 
@@ -1756,33 +1838,69 @@ const mockLitigationDocuments = [
 const mockLitigationTemplates = [
   {
     id: 1,
-    name: '民事起诉状模板',
+    name: '民事起诉状',
     type: 'complaint',
-    description: '标准民事起诉状模板',
-    templatePath: '/templates/civil_complaint.docx',
-    variables: ['borrowerName', 'debtAmount', 'courtName', 'caseDescription'],
     category: 'litigation',
-    createTime: '2024-01-01 00:00:00'
+    description: '民事起诉状标准模板，适用于债权债务纠纷案件',
+    templatePath: '/templates/civil_complaint.docx',
+    variables: ['caseNumber', 'borrowerName', 'borrowerIdCard', 'debtAmount', 'courtName', 'currentDate', 'clientName'],
+    content: '民事起诉状\n\n原告：${clientName}\n被告：${borrowerName}，身份证号：${borrowerIdCard}\n\n诉讼请求：\n1. 请求法院判令被告偿还债务人民币${debtAmount}元\n2. 本案诉讼费用由被告承担\n\n事实与理由：\n...\n\n此致\n${courtName}\n\n起诉人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 10:00:00'
   },
   {
     id: 2,
-    name: '证据清单模板',
-    type: 'evidence',
-    description: '诉讼证据清单模板',
-    templatePath: '/templates/evidence_list.docx',
-    variables: ['borrowerName', 'evidenceList', 'caseNumber'],
+    name: '执行申请书',
+    type: 'execution',
     category: 'litigation',
-    createTime: '2024-01-01 00:00:00'
+    description: '强制执行申请书模板',
+    templatePath: '/templates/execution_application.docx',
+    variables: ['caseNumber', 'borrowerName', 'judgmentAmount', 'courtName', 'currentDate', 'clientName'],
+    content: '执行申请书\n\n申请执行人：${clientName}\n被执行人：${borrowerName}\n\n申请执行标的：人民币${judgmentAmount}元\n\n申请执行依据：${courtName}作出的民事判决书（案件编号：${caseNumber}）\n\n申请执行事项：\n1. 强制执行判决书确定的债务\n2. 执行费用由被执行人承担\n\n此致\n${courtName}\n\n申请人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 11:00:00'
   },
   {
     id: 3,
-    name: '执行申请书模板',
-    type: 'execution',
-    description: '强制执行申请书模板',
-    templatePath: '/templates/execution_application.docx',
-    variables: ['borrowerName', 'judgmentAmount', 'judgmentDate'],
+    name: '庭审传票',
+    type: 'summons',
     category: 'litigation',
-    createTime: '2024-01-01 00:00:00'
+    description: '法院庭审传票模板',
+    templatePath: '/templates/court_summons.docx',
+    variables: ['caseNumber', 'borrowerName', 'trialDate', 'courtName', 'courtroom'],
+    content: '传票\n\n${borrowerName}：\n\n本院受理的${clientName}诉你债权债务纠纷一案（案件编号：${caseNumber}），定于${trialDate}在${courtName}${courtroom}开庭审理，你应准时到庭参加诉讼。\n\n如不到庭，将依法缺席判决。\n\n特此传唤\n\n${courtName}\n日期：${currentDate}',
+    createTime: '2024-01-15 12:00:00'
+  },
+  {
+    id: 4,
+    name: '财产保全申请书',
+    type: 'other',
+    category: 'litigation',
+    description: '诉前财产保全申请书模板',
+    templatePath: '/templates/property_preservation.docx',
+    variables: ['caseNumber', 'borrowerName', 'preservationAmount', 'courtName', 'currentDate', 'clientName'],
+    content: '财产保全申请书\n\n申请人：${clientName}\n被申请人：${borrowerName}\n\n申请事项：\n请求法院对被申请人的财产采取保全措施，保全金额为人民币${preservationAmount}元。\n\n申请理由：\n...\n\n此致\n${courtName}\n\n申请人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 13:00:00'
+  },
+  {
+    id: 5,
+    name: '上诉状',
+    type: 'appeal',
+    category: 'litigation',
+    description: '民事上诉状模板',
+    templatePath: '/templates/civil_appeal.docx',
+    variables: ['caseNumber', 'borrowerName', 'firstInstanceCourt', 'secondInstanceCourt', 'currentDate', 'clientName'],
+    content: '民事上诉状\n\n上诉人：${clientName}\n被上诉人：${borrowerName}\n\n上诉请求：\n1. 请求二审法院撤销${firstInstanceCourt}作出的民事判决书\n2. 依法改判支持上诉人的诉讼请求\n\n上诉理由：\n...\n\n此致\n${secondInstanceCourt}\n\n上诉人：${clientName}\n日期：${currentDate}',
+    createTime: '2024-01-15 14:00:00'
+  },
+  {
+    id: 6,
+    name: '举证通知书',
+    type: 'notice',
+    category: 'litigation',
+    description: '举证通知书模板',
+    templatePath: '/templates/evidence_notice.docx',
+    variables: ['caseNumber', 'borrowerName', 'evidenceDeadline', 'courtName', 'currentDate'],
+    content: '举证通知书\n\n${borrowerName}：\n\n本院受理的债权债务纠纷案件（案件编号：${caseNumber}），现通知你应在${evidenceDeadline}前提交相关证据材料。\n\n逾期提供证据的，将承担相应的法律后果。\n\n${courtName}\n日期：${currentDate}',
+    createTime: '2024-01-15 15:00:00'
   }
 ];
 
@@ -2056,6 +2174,51 @@ app.get('/litigation/document-templates', (req, res) => {
     message: '查询成功',
     data: mockLitigationTemplates
   });
+});
+
+// 上传文书模板
+app.post('/litigation/document-templates', (req, res) => {
+  const templateData = req.body;
+  
+  const newTemplate = {
+    id: Math.max(...mockLitigationTemplates.map(t => t.id)) + 1,
+    name: templateData.name,
+    type: templateData.type,
+    description: templateData.description || '',
+    content: templateData.content || '',
+    templatePath: `/templates/${templateData.type}_${Date.now()}.${templateData.fileType || 'docx'}`,
+    variables: templateData.variables || [],
+    category: templateData.category || 'litigation',
+    createTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    createdBy: '系统用户'
+  };
+  
+  mockLitigationTemplates.push(newTemplate);
+  
+  res.json({
+    code: 200,
+    message: '模板上传成功',
+    data: newTemplate
+  });
+});
+
+// 删除文书模板
+app.delete('/litigation/document-templates/:id', (req, res) => {
+  const templateId = parseInt(req.params.id);
+  const index = mockLitigationTemplates.findIndex(t => t.id === templateId);
+  
+  if (index !== -1) {
+    mockLitigationTemplates.splice(index, 1);
+    res.json({
+      code: 200,
+      message: '模板删除成功'
+    });
+  } else {
+    res.status(404).json({
+      code: 404,
+      message: '模板不存在'
+    });
+  }
 });
 
 // 获取诉讼统计
