@@ -127,7 +127,7 @@ export const settlementService = {
   /**
    * 分页查询结算列表
    */
-  getSettlementList: (params: SettlementQueryParams): Promise<{ data: PaginationData<SettlementRecord> }> => {
+  getSettlementList: (params: SettlementQueryParams): Promise<PaginationData<SettlementRecord>> => {
     return http.get('/settlement/records', { params })
   },
 
@@ -246,7 +246,7 @@ export const settlementService = {
     endDate?: string
     settlementType?: string
     clientId?: number
-  }): Promise<{ data: SettlementStats }> => {
+  }): Promise<SettlementStats> => {
     return http.get('/settlement/stats', { params })
   },
 

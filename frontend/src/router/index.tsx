@@ -29,6 +29,10 @@ const SettlementManagement = lazy(() => import('@/pages/Settlement/SettlementMan
 const SettlementList = lazy(() => import('@/pages/Settlement/SettlementList'))
 const SettlementCalculator = lazy(() => import('@/pages/Settlement/SettlementCalculator'))
 const SettlementReports = lazy(() => import('@/pages/Settlement/SettlementReports'))
+const SettlementSettings = lazy(() => import('@/pages/Settlement/SettlementSettings'))
+const SettlementEdit = lazy(() => import('@/pages/Settlement/SettlementEdit'))
+const SettlementDetail = lazy(() => import('@/pages/Settlement/SettlementDetail'))
+const SettlementCreate = lazy(() => import('@/pages/Settlement/SettlementCreate'))
 const NotificationCenter = lazy(() => import('@/pages/Notification/NotificationCenter'))
 const NotificationList = lazy(() => import('@/pages/Notification/NotificationList'))
 const NotificationSend = lazy(() => import('@/pages/Notification/NotificationSend'))
@@ -264,6 +268,46 @@ export const router = createBrowserRouter([
             element: (
               <PageSuspense>
                 <SettlementReports />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'settings',
+            element: (
+              <PageSuspense>
+                <SettlementSettings />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'create',
+            element: (
+              <PageSuspense>
+                <SettlementCreate />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'edit/:id',
+            element: (
+              <PageSuspense>
+                <SettlementEdit />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'detail/:id',
+            element: (
+              <PageSuspense>
+                <SettlementDetail />
+              </PageSuspense>
+            ),
+          },
+          {
+            path: 'calculate/:id',
+            element: (
+              <PageSuspense>
+                <SettlementCalculator />
               </PageSuspense>
             ),
           },

@@ -68,7 +68,7 @@ const Login: React.FC = () => {
         {/* 标题 */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <Title level={2} style={{ color: '#001529', marginBottom: 8 }}>
-            诉讼调解平台
+            全国分散诉调平台
           </Title>
           <Text type='secondary'>个贷不良资产分散诉讼调解平台</Text>
         </div>

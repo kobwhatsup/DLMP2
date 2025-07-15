@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API连接测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>DLMP API连接测试</h1>
+    
+    <div class="test-section">
+        <h2>测试配置</h2>
+        <p>Mock后端地址: http://localhost:8080</p>
+        <p>前端应用地址: http://localhost:5173</p>
+    </div>
+
+    <div class="test-section">
+        <h2>API测试</h2>
+        <button onclick="testAPI('/api/auth/login')">测试 /api/auth/login</button>
+        <button onclick="testAPI('/user/auth/login')">测试 /user/auth/login</button>
+        <button onclick="testAPI('/api/health')">测试健康检查</button>
+        <button onclick="testAPI('/api/case/list')">测试案件列表</button>
+        <button onclick="testAPI('/case/cases')">测试案件列表(无前缀)</button>
+        
+        <div id="result" style="margin-top: 20px;"></div>
+    </div>
+
+    <script>
+        async function testAPI(endpoint) {
+            const resultDiv = document.getElementById('result');
+            const baseURL = 'http://localhost:8080';
+            const url = baseURL + endpoint;
+            
+            resultDiv.innerHTML = `<p>正在测试: ${url}</p>`;
+            
+            try {
+                let response;
+                
+                if (endpoint.includes('login')) {
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            username: 'admin',
+                            password: 'admin123'
+                        })
+                    });
+                } else {
+                    response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                }
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ 成功: ${url}</p>
+                        <p>状态码: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">❌ 失败: ${url}</p>
+                        <p>状态码: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">❌ 网络错误: ${url}</p>
+                    <p>错误信息: ${error.message}</p>
+                    <p>请确保Mock后端服务正在运行</p>
+                `;
+            }
+        }
+        
+        // 页面加载时自动测试健康检查
+        window.onload = () => {
+            testAPI('/api/health');
+        };
+    </script>
+</body>
+</html>

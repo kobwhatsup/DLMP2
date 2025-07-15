@@ -33,7 +33,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { FeeType, SettlementRecord, FeeDetail } from '@/types'
 import { settlementService, caseService } from '@/services'
 import { formatCurrency } from '@/utils'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 const { Option } = Select
 const { Title, Paragraph } = Typography
@@ -74,6 +74,7 @@ interface FeeRule {
 
 const SettlementCalculator: React.FC = () => {
   const navigate = useNavigate()
+  const { id } = useParams<{ id: string }>()
   const [form] = Form.useForm()
   const [state, setState] = useState<CalculationState>({
     settlementType: 'mediation',
@@ -185,7 +186,7 @@ const SettlementCalculator: React.FC = () => {
         size: 100,
         status: 3 // 已分案状态
       })
-      setCases(response.data.records)
+      setCases(response.records)
     } catch (error) {
       message.error('获取案件列表失败')
     }
@@ -195,7 +196,7 @@ const SettlementCalculator: React.FC = () => {
   const fetchFeeRules = async (settlementType?: string) => {
     try {
       const response = await settlementService.getFeeRules(settlementType)
-      setFeeRules(response.data)
+      setFeeRules(response)
     } catch (error) {
       message.error('获取费用规则失败')
     }
@@ -219,9 +220,9 @@ const SettlementCalculator: React.FC = () => {
 
       setState(prev => ({
         ...prev,
-        feeDetails: response.data.feeDetails,
-        totalAmount: response.data.totalAmount,
-        calculation: response.data.calculation,
+        feeDetails: response.feeDetails,
+        totalAmount: response.totalAmount,
+        calculation: response.calculation,
         loading: false
       }))
 
@@ -248,7 +249,7 @@ const SettlementCalculator: React.FC = () => {
       })
 
       message.success('结算记录创建成功')
-      navigate(`/settlement/detail/${response.data.id}`)
+      navigate(`/settlement/detail/${response.id}`)
     } catch (error) {
       message.error('创建结算记录失败')
     }
@@ -301,12 +302,12 @@ const SettlementCalculator: React.FC = () => {
       setState(prev => ({
         ...prev,
         caseId,
-        caseInfo: response.data,
-        baseAmount: response.data.debtAmount || 0
+        caseInfo: response,
+        baseAmount: response.overdueTotalAmount || 0
       }))
       
       form.setFieldsValue({
-        baseAmount: response.data.debtAmount || 0
+        baseAmount: response.overdueTotalAmount || 0
       })
       
       setCurrentStep(1)
@@ -321,10 +322,37 @@ const SettlementCalculator: React.FC = () => {
     fetchFeeRules(value)
   }
 
+  // 根据URL参数预加载案件信息
+  const loadCaseFromParams = async () => {
+    if (id) {
+      try {
+        const response = await caseService.getCaseById(Number(id))
+        const caseData = response
+        
+        setState(prev => ({
+          ...prev,
+          caseId: caseData.id,
+          caseInfo: caseData,
+          baseAmount: caseData.overdueTotalAmount || 0
+        }))
+        
+        form.setFieldsValue({
+          caseId: caseData.id,
+          baseAmount: caseData.overdueTotalAmount || 0
+        })
+        
+        setCurrentStep(1)
+      } catch (error) {
+        message.error('获取案件信息失败')
+      }
+    }
+  }
+
   useEffect(() => {
     fetchCases()
     fetchFeeRules()
-  }, [])
+    loadCaseFromParams()
+  }, [id])
 
   const steps = [
     {
@@ -388,7 +416,7 @@ const SettlementCalculator: React.FC = () => {
                   >
                     {cases.map(caseItem => (
                       <Option key={caseItem.id} value={caseItem.id}>
-                        {caseItem.caseNumber} - {caseItem.borrowerName}
+                        {caseItem.caseNo} - {caseItem.debtorName}
                       </Option>
                     ))}
                   </Select>
@@ -476,11 +504,11 @@ const SettlementCalculator: React.FC = () => {
         {state.caseInfo && (
           <Card title="案件信息" style={{ marginBottom: 16 }}>
             <Descriptions column={3} size="small">
-              <Descriptions.Item label="案件编号">{state.caseInfo.caseNumber}</Descriptions.Item>
-              <Descriptions.Item label="借款人">{state.caseInfo.borrowerName}</Descriptions.Item>
+              <Descriptions.Item label="案件编号">{state.caseInfo.caseNo}</Descriptions.Item>
+              <Descriptions.Item label="借款人">{state.caseInfo.debtorName}</Descriptions.Item>
               <Descriptions.Item label="债务金额">
                 <span style={{ fontWeight: 'bold', color: '#f5222d' }}>
-                  {formatCurrency(state.caseInfo.debtAmount)}
+                  {formatCurrency(state.caseInfo.overdueTotalAmount)}
                 </span>
               </Descriptions.Item>
               <Descriptions.Item label="委托客户">{state.caseInfo.clientName}</Descriptions.Item>

@@ -232,8 +232,8 @@ const SettlementReports: React.FC = () => {
       
       setReportState(prev => ({
         ...prev,
-        reports: response.data.records,
-        total: response.data.total,
+        reports: response.records,
+        total: response.total,
         loading: false
       }))
     } catch (error) {
@@ -246,7 +246,7 @@ const SettlementReports: React.FC = () => {
   const fetchStatsData = async () => {
     try {
       const response = await settlementService.getSettlementStats()
-      setStatsData(response.data)
+      setStatsData(response)
     } catch (error) {
       message.error('获取统计数据失败')
     }
@@ -256,7 +256,7 @@ const SettlementReports: React.FC = () => {
   const fetchTrendData = async () => {
     try {
       const response = await settlementService.getSettlementTrend(30)
-      setTrendData(response.data)
+      setTrendData(response)
     } catch (error) {
       message.error('获取趋势数据失败')
     }
@@ -266,7 +266,7 @@ const SettlementReports: React.FC = () => {
   const fetchAgingData = async () => {
     try {
       const response = await settlementService.getAgingAnalysis()
-      setAgingData(response.data)
+      setAgingData(response)
     } catch (error) {
       message.error('获取账龄分析失败')
     }

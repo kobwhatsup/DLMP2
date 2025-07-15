@@ -77,8 +77,8 @@ create_dev_config() {
     cat > frontend/.env.development << EOF
 # 开发环境配置
 VITE_APP_TITLE=个贷不良资产分散诉讼调解平台
-VITE_API_BASE_URL=http://localhost:8080/api
-VITE_UPLOAD_URL=http://localhost:8080/api/file/upload
+VITE_API_BASE_URL=http://localhost:8080
+VITE_UPLOAD_URL=http://localhost:8080/file/upload
 VITE_WEBSOCKET_URL=ws://localhost:8080/ws
 
 # 开发模式标识

@@ -110,7 +110,7 @@ const Sidebar: React.FC = () => {
               fontWeight: 600,
             }}
           >
-            诉讼调解平台
+            全国分散诉调平台
           </Title>
         ) : (
           <Title

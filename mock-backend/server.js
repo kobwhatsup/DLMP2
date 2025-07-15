@@ -1,12 +1,15 @@
 import express from 'express';
 import cors from 'cors';
+import settlementRouter from './routes/settlement.js';
+import litigationRouter from './routes/litigation.js';
+import caseRouter from './routes/case.js';
 
 const app = express();
 const PORT = 8080;
 
 // 中间件
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
@@ -2281,6 +2284,11 @@ app.get('/litigation/available-mediation-cases', (req, res) => {
     }
   });
 });
+
+// 注册路由
+app.use('/settlement', settlementRouter);
+app.use('/litigation', litigationRouter);
+app.use('/case', caseRouter);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

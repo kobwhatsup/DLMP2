@@ -291,8 +291,8 @@ const SettlementList: React.FC = () => {
       
       setListState(prev => ({
         ...prev,
-        settlements: response.data.records,
-        total: response.data.total,
+        settlements: response.records,
+        total: response.total,
         loading: false
       }))
     } catch (error) {
@@ -305,7 +305,7 @@ const SettlementList: React.FC = () => {
   const fetchSettlementStats = async () => {
     try {
       const response = await settlementService.getSettlementStats(searchParams)
-      setListState(prev => ({ ...prev, stats: response.data }))
+      setListState(prev => ({ ...prev, stats: response }))
     } catch (error) {
       message.error('获取统计信息失败')
     }
